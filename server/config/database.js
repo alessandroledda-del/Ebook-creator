@@ -1,9 +1,14 @@
 const mongoose = require('mongoose');
 
-const dbURI = 'mongodb://localhost:27017/yourdbname'; // Replace with your MongoDB URI
+const connectDB = async () => {
+    try {
+        const conn = await mongoose.connect(process.env.MONGO_URI);
+        console.log(`✅ MongoDB connesso: ${conn.connection.host}`);
+        return conn;
+    } catch (error) {
+        console.error(`❌ Errore MongoDB: ${error.message}`);
+        process.exit(1);
+    }
+};
 
-mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log('MongoDB connected...'))
-    .catch(err => console.log(err));
-
-module.exports = mongoose;
+module.exports = connectDB;
