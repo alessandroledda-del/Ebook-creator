@@ -1,0 +1,10 @@
+{
+  "welcome": "Welcome",
+  "login": "Login",
+  "logout": "Logout",
+  "error": "Error",
+  "success": "Success",
+  "book": "Book",
+  "chapter": "Chapter",
+  "user": "User"
+}
