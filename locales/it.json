@@ -1,1 +1,10 @@
-{ "greeting": "Ciao!", "farewell": "Arrivederci", "thank_you": "Grazie", "yes": "Sì", "no": "No", "welcome": "Benvenuto", "error": "Errore", "success": "Successo", "loading": "Caricamento...", "create_ebook": "Crea eBook", "manage_ebook": "Gestisci eBook", "delete_ebook": "Elimina eBook", "export_pdf": "Esporta in PDF", "export_epub": "Esporta in EPUB", "language": "Lingua", "settings": "Impostazioni", "logout": "Esci" }
+{
+  "welcome": "Benvenuto",
+  "login": "Accedi",
+  "logout": "Esci",
+  "error": "Errore",
+  "success": "Successo",
+  "book": "Libro",
+  "chapter": "Capitolo",
+  "user": "Utente"
+}
