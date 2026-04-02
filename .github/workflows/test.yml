@@ -1,12 +1,50 @@
-name: Tests
-on: [push, pull_request]
+name: Run Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:latest
+        options: >-
+          --health-cmd mongosh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '18'
-      - run: npm install
-      - run: npm test
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run tests
+      run: npm test
+      env:
+        MONGO_URI: mongodb://localhost:27017/ebook-creator-test
+        NODE_ENV: test
+        JWT_SECRET: test_secret_key
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      if: always()
+      with:
+        files: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
