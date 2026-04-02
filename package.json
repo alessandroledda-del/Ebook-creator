@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Un'applicazione web per creare e gestire eBook in formato digitale",
   "main": "server/index.js",
-  "type": "module",
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
