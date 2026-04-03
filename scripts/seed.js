@@ -58,21 +58,21 @@ async function seedDB() {
 
         // Crea capitoli di test
         const chapter1 = await Chapter.create({
-            titolo: 'Il Viaggio Inizia',
-            contenuto: 'In una volta c\'era uno hobbit...',
-            libro: book1._id,
-            numeroCapitolo: 1,
-            ordine: 1
-        });
+    title: 'Il Viaggio Inizia',
+    content: 'In una volta c\'era uno hobbit...',
+    libro: book1._id,
+    numeroCapitolo: 1,
+    ordine: 1
+});
         console.log('✅ Capitolo 1 creato:', chapter1.titolo);
 
         const chapter2 = await Chapter.create({
-            titolo: 'Arrivo a Rivendell',
-            contenuto: 'Dopo molti giorni di viaggio...',
-            libro: book1._id,
-            numeroCapitolo: 2,
-            ordine: 2
-        });
+    title: 'Arrivo a Rivendell',
+    content: 'Dopo molti giorni di viaggio...',
+    libro: book1._id,
+    numeroCapitolo: 2,
+    ordine: 2
+});
         console.log('✅ Capitolo 2 creato:', chapter2.titolo);
 
         console.log('\n✅ Database seeded con successo!');
