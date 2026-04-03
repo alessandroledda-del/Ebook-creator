@@ -8,6 +8,7 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('client'));
 
 // Connessione a MongoDB
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/ebook-creator';
