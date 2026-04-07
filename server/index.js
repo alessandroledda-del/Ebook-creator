@@ -1,94 +1,54 @@
 require('dotenv').config();
+
+if (!process.env.JWT_SECRET) {
+  console.error('❌ JWT_SECRET non configurato. Imposta JWT_SECRET nel file .env');
+  process.exit(1);
+}
+
 const express = require('express');
-const mongoose = require('mongoose');
-const path = require('path');
+const cors = require('cors');
+const connectDB = require('./config/database');
+
+const authRoutes = require('./routes/auth');
+const bookRoutes = require('./routes/books');
+const chapterRoutes = require('./routes/chapters');
+const userRoutes = require('./routes/users');
 
 const app = express();
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('client'));
-
-// Connessione a MongoDB
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/ebook-creator';
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log('Connesso a MongoDB'))
-  .catch((err) => {
-    console.error('Errore connessione MongoDB:', err.message);
-    process.exit(1);
-  });
 
 // Route di base
 app.get('/', (req, res) => {
   res.json({ message: 'Ebook-creator API attiva', version: '1.0.0' });
 });
 
-// Route libri
-const Book = require('./models/Book');
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/books', bookRoutes);
+app.use('/api/books/:bookId/chapters', chapterRoutes);
+app.use('/api/users', userRoutes);
 
-// GET tutti i libri
-app.get('/api/books', async (req, res) => {
-  try {
-    const books = await Book.find().sort({ createdDate: -1 });
-    res.json(books);
-  } catch (err) {
-    res.status(500).json({ error: 'Errore nel recupero dei libri' });
-  }
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Endpoint non trovato' });
 });
 
-// GET singolo libro
-app.get('/api/books/:id', async (req, res) => {
-  try {
-    const book = await Book.findById(req.params.id);
-    if (!book) return res.status(404).json({ error: 'Libro non trovato' });
-    res.json(book);
-  } catch (err) {
-    res.status(500).json({ error: 'Errore nel recupero del libro' });
-  }
-});
+// Avvio server solo quando eseguito direttamente (non quando importato dai test)
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  connectDB().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server in ascolto sulla porta ${PORT}`);
+      console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+    });
+  });
+}
 
-// POST crea nuovo libro
-app.post('/api/books', async (req, res) => {
-  try {
-    const book = new Book(req.body);
-    await book.save();
-    res.status(201).json(book);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+module.exports = app;
 
-// PUT aggiorna libro
-app.put('/api/books/:id', async (req, res) => {
-  try {
-    const book = await Book.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    if (!book) return res.status(404).json({ error: 'Libro non trovato' });
-    res.json(book);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
 
-// DELETE elimina libro
-app.delete('/api/books/:id', async (req, res) => {
-  try {
-    const book = await Book.findByIdAndDelete(req.params.id);
-    if (!book) return res.status(404).json({ error: 'Libro non trovato' });
-    res.json({ message: 'Libro eliminato con successo' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Avvio server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server in ascolto sulla porta ${PORT}`);
-  console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
-});
