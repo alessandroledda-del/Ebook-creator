@@ -10,9 +10,10 @@ const path = require('path');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 
-const booksRouter = require('./routes/books');
-const usersRouter = require('./routes/users');
-const chaptersRouter = require('./routes/chapters');
+const authRoutes = require('./routes/auth');
+const bookRoutes = require('./routes/books');
+const userRoutes = require('./routes/users');
+const chapterRoutes = require('./routes/chapters');
 
 const app = express();
 
