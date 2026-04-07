@@ -6,18 +6,17 @@ if (!process.env.JWT_SECRET) {
 }
 
 const express = require('express');
-const cors = require('cors');
+const path = require('path');
 const connectDB = require('./config/database');
+const errorHandler = require('./middleware/errorHandler');
 
-const authRoutes = require('./routes/auth');
-const bookRoutes = require('./routes/books');
-const chapterRoutes = require('./routes/chapters');
-const userRoutes = require('./routes/users');
+const booksRouter = require('./routes/books');
+const usersRouter = require('./routes/users');
+const chaptersRouter = require('./routes/chapters');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// Middleware globali
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('client'));
