@@ -1,51 +1,49 @@
 # Ebook Creator
 
-## Project Description
-Ebook Creator is a tool designed for creating ebooks in various formats. It allows users to input text, images, and layout specifications to generate professional-quality electronic books.
+## Struttura del Progetto
+Il progetto Ebook Creator è organizzato nella seguente struttura:
 
-## Features
-- Generate ebooks in formats like EPUB and PDF.
-- Easy-to-use interface for inputting content.
-- Support for text styling and images.
-- Preview functionality to view the ebook before final generation.
+```
+Ebook-creator/
+├── src/                  # Codice sorgente
+│   ├── components/       # Componenti dell'interfaccia utente
+│   ├── services/         # Servizi per la gestione delle API
+│   └── utils/            # Funzioni di utilità
+├── tests/                # Test dell'applicazione
+├── package.json          # Dettagli del progetto e dipendenze
+└── README.md             # Documentazione del progetto
+``` 
 
-## Installation
-To install Ebook Creator, follow these steps:
-1. Clone the repository:
+## Installazione
+Per installare il progetto, seguire questi passaggi:
+1. Clone il repository:
    ```bash
    git clone https://github.com/alessandroledda-del/Ebook-creator.git
    ```
-2. Navigate into the directory:
+2. Navigare nella cartella del progetto:
    ```bash
    cd Ebook-creator
    ```
-3. Install dependencies using your package manager (e.g., npm, pip):
+3. Installare le dipendenze:
    ```bash
    npm install
    ```
 
-## Setup
-After installation, you can set up the project by configuring the necessary environment variables and settings according to your development environment.
+## Configurazione
+Assicurarsi di avere Node.js e npm installati. Dopo aver installato le dipendenze, è possibile configurare le variabili ambientali necessarie creando un file `.env` nella cartella principale. Un esempio di file `.env` è fornito come `.env.example`.
 
 ## API Endpoints
-- `GET /api/ebooks` - Retrieve a list of generated ebooks.
-- `POST /api/ebooks/generate` - Generate a new ebook with the provided content.
+| Endpoint               | Metodo  | Descrizione                            |
+|-----------------------|---------|---------------------------------------|
+| `/api/v1/books`       | GET     | Recupera l'elenco di tutti i libri    |
+| `/api/v1/books`       | POST    | Crea un nuovo libro                   |
+| `/api/v1/books/:id`   | GET     | Recupera un libro specifico           |
+| `/api/v1/books/:id`   | PUT     | Aggiorna un libro specifico           |
+| `/api/v1/books/:id`   | DELETE  | Elimina un libro specifico            |
 
-## Project Structure
+## Utilizzo
+Dopo aver configurato l'applicazione, è possibile avviarla eseguendo il seguente comando:
+```bash
+npm start
 ```
-Ebook-creator/
-├── src/          # Source files
-├── tests/        # Test files
-├── public/       # Static assets
-└── README.md     # Project documentation
-```
-
-## Usage Instructions
-To create an ebook:
-1. Launch the application:
-   ```bash
-   npm start
-   ```
-2. Follow the on-screen instructions to input your text and images.
-3. Choose your desired output format and click on *Generate*.
-4. Your ebook will be available for download once the generation is complete.
+L'applicazione sarà disponibile su `http://localhost:3000`.
