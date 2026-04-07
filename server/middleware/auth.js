@@ -11,7 +11,12 @@ const auth = (req, res, next) => {
             });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            return res.status(500).json({ success: false, message: 'Configurazione server non valida' });
+        }
+
+        const decoded = jwt.verify(token, secret);
         req.user = decoded;
         next();
     } catch (error) {
