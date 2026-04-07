@@ -1,69 +1,117 @@
 const express = require('express');
-const router = express.Router();
-const bookService = require('../services/bookService');
-const chapterService = require('../services/chapterService');
-const { validateBook, validateBookUpdate } = require('../middleware/validation');
+const mongoose = require('mongoose');
+const Book = require('../models/Book');
+const auth = require('../middleware/auth');
 
-// GET tutti i libri
-router.get('/', async (req, res, next) => {
+const router = express.Router();
+
+function isValidId(id) {
+  return mongoose.isValidObjectId(id);
+}
+
+// GET /api/books  –  public, with pagination
+router.get('/', async (req, res) => {
   try {
-    const books = await bookService.getAllBooks();
-    res.json(books);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const [books, total] = await Promise.all([
+      Book.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('userId', 'name email'),
+      Book.countDocuments()
+    ]);
+
+    res.json({
+      books,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    });
   } catch (err) {
-    next(err);
+    res.status(500).json({ error: 'Errore nel recupero dei libri' });
   }
 });
 
-// GET singolo libro
-router.get('/:id', async (req, res, next) => {
+// GET /api/books/:id  –  public
+router.get('/:id', async (req, res) => {
+  if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID non valido' });
   try {
-    const book = await bookService.getBookById(req.params.id);
+    const book = await Book.findById(req.params.id).populate('userId', 'name email');
     if (!book) return res.status(404).json({ error: 'Libro non trovato' });
     res.json(book);
   } catch (err) {
-    next(err);
+    res.status(500).json({ error: 'Errore nel recupero del libro' });
   }
 });
 
-// POST crea nuovo libro
-router.post('/', validateBook, async (req, res, next) => {
+// POST /api/books  –  protected
+router.post('/', auth, async (req, res) => {
   try {
-    const book = await bookService.createBook(req.body);
+    const { title, author, description, genre, language, price, tags } = req.body;
+
+    if (!title || !author || price === undefined) {
+      return res.status(400).json({ error: 'Titolo, autore e prezzo sono obbligatori' });
+    }
+
+    const book = await Book.create({
+      userId: req.user.id,
+      title,
+      author,
+      description,
+      genre,
+      language,
+      price,
+      tags
+    });
+
     res.status(201).json(book);
   } catch (err) {
-    next(err);
+    res.status(400).json({ error: err.message });
   }
 });
 
-// PUT aggiorna libro
-router.put('/:id', validateBookUpdate, async (req, res, next) => {
+// PUT /api/books/:id  –  protected (only the owner or admin)
+router.put('/:id', auth, async (req, res) => {
+  if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID non valido' });
   try {
-    const book = await bookService.updateBook(req.params.id, req.body);
+    const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Libro non trovato' });
-    res.json(book);
+
+    if (book.userId.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Non autorizzato' });
+    }
+
+    const { title, author, description, genre, language, price, tags, status } = req.body;
+
+    const updated = await Book.findByIdAndUpdate(
+      req.params.id,
+      { title, author, description, genre, language, price, tags, status },
+      { new: true, runValidators: true }
+    );
+
+    res.json(updated);
   } catch (err) {
-    next(err);
+    res.status(400).json({ error: err.message });
   }
 });
 
-// DELETE elimina libro
-router.delete('/:id', async (req, res, next) => {
+// DELETE /api/books/:id  –  protected (only the owner or admin)
+router.delete('/:id', auth, async (req, res) => {
+  if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID non valido' });
   try {
-    const book = await bookService.deleteBook(req.params.id);
+    const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Libro non trovato' });
+
+    if (book.userId.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Non autorizzato' });
+    }
+
+    await Book.findByIdAndDelete(req.params.id);
     res.json({ message: 'Libro eliminato con successo' });
   } catch (err) {
-    next(err);
-  }
-});
-
-// GET capitoli di un libro
-router.get('/:bookId/chapters', async (req, res, next) => {
-  try {
-    const chapters = await chapterService.getChaptersByBook(req.params.bookId);
-    res.json(chapters);
-  } catch (err) {
-    next(err);
+    res.status(500).json({ error: err.message });
   }
 });
 

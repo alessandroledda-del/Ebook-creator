@@ -1,41 +1,31 @@
-// deploy.js
+// deploy.js – sequential deployment with target platform selection
 
-const { exec } = require('child_process');
+const { execSync } = require('child_process');
 require('dotenv').config();
 
-const railwayDeploy = () => {
-    console.log('Deploying to Railway...');
-    exec('railway up', (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error deploying to Railway: ${error.message}`);
-            return;
-        }
-        if (stderr) {
-            console.error(`Railway stderr: ${stderr}`);
-            return;
-        }
-        console.log(`Railway output: ${stdout}`);
-    });
+const PLATFORM = process.argv[2] || 'railway';
+
+const deploy = (platform) => {
+    const commands = {
+        railway: 'railway up',
+        vercel: 'vercel --prod'
+    };
+
+    const cmd = commands[platform];
+    if (!cmd) {
+        console.error(`❌ Piattaforma non supportata: "${platform}". Usa "railway" o "vercel".`);
+        process.exit(1);
+    }
+
+    console.log(`🚀 Deploying to ${platform}...`);
+    try {
+        execSync(cmd, { stdio: 'inherit' });
+        console.log(`✅ Deploy su ${platform} completato.`);
+    } catch (error) {
+        console.error(`❌ Errore deploy su ${platform}: ${error.message}`);
+        process.exit(1);
+    }
 };
 
-const vercelDeploy = () => {
-    console.log('Deploying to Vercel...');
-    exec('vercel --prod', (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error deploying to Vercel: ${error.message}`);
-            return;
-        }
-        if (stderr) {
-            console.error(`Vercel stderr: ${stderr}`);
-            return;
-        }
-        console.log(`Vercel output: ${stdout}`);
-    });
-};
+deploy(PLATFORM);
 
-const main = () => {
-    railwayDeploy();
-    vercelDeploy();
-};
-
-main();

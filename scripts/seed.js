@@ -1,8 +1,8 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const User = require('../models/user');
-const Book = require('../models/book');
-const Chapter = require('../models/chapter');
+const User = require('../server/models/User');
+const Book = require('../server/models/Book');
+const Chapter = require('../server/models/Chapter');
 
 async function seedDB() {
     try {
@@ -17,70 +17,72 @@ async function seedDB() {
 
         // Crea admin user
         const admin = await User.create({
-            nome: 'Admin User',
+            name: 'Admin User',
             email: 'admin@ebook.com',
             password: 'admin123',
-            ruolo: 'admin'
+            role: 'admin'
         });
         console.log('✅ Admin creato:', admin.email);
 
         // Crea utente normale
         const user = await User.create({
-            nome: 'John Doe',
+            name: 'John Doe',
             email: 'john@ebook.com',
             password: 'user123',
-            ruolo: 'user'
+            role: 'user'
         });
         console.log('✅ Utente creato:', user.email);
 
         // Crea libri di test
         const book1 = await Book.create({
-            titolo: 'Il Signore degli Anelli',
-            autore: 'J.R.R. Tolkien',
-            descrizione: 'Un epico fantasy classico',
-            author: admin._id,
-            genere: 'Fantasy',
-            statoCreazione: 'pubblicato',
-            tag: ['fantasy', 'avventura', 'classico']
+            userId: admin._id,
+            title: 'Il Signore degli Anelli',
+            author: 'J.R.R. Tolkien',
+            description: 'Un epico fantasy classico',
+            genre: 'Fantasy',
+            price: 9.99,
+            status: 'published',
+            tags: ['fantasy', 'avventura', 'classico']
         });
-        console.log('✅ Libro 1 creato:', book1.titolo);
+        console.log('✅ Libro 1 creato:', book1.title);
 
         const book2 = await Book.create({
-            titolo: 'Harry Potter e la Pietra Filosofale',
-            autore: 'J.K. Rowling',
-            descrizione: 'La storia del giovane mago',
-            author: user._id,
-            genere: 'Fantasy',
-            statoCreazione: 'bozza',
-            tag: ['fantasy', 'magia', 'giovani']
+            userId: user._id,
+            title: 'Harry Potter e la Pietra Filosofale',
+            author: 'J.K. Rowling',
+            description: 'La storia del giovane mago',
+            genre: 'Fantasy',
+            price: 7.99,
+            status: 'draft',
+            tags: ['fantasy', 'magia', 'giovani']
         });
-        console.log('✅ Libro 2 creato:', book2.titolo);
+        console.log('✅ Libro 2 creato:', book2.title);
 
         // Crea capitoli di test
         const chapter1 = await Chapter.create({
-    title: 'Il Viaggio Inizia',
-    content: 'In una volta c\'era uno hobbit...',
-    libro: book1._id,
-    numeroCapitolo: 1,
-    ordine: 1
-});
-        console.log('✅ Capitolo 1 creato:', chapter1.titolo);
+            book: book1._id,
+            title: 'Il Viaggio Inizia',
+            content: "In una volta c'era uno hobbit...",
+            chapterNumber: 1,
+            order: 1
+        });
+        console.log('✅ Capitolo 1 creato:', chapter1.title);
 
         const chapter2 = await Chapter.create({
-    title: 'Arrivo a Rivendell',
-    content: 'Dopo molti giorni di viaggio...',
-    libro: book1._id,
-    numeroCapitolo: 2,
-    ordine: 2
-});
-        console.log('✅ Capitolo 2 creato:', chapter2.titolo);
+            book: book1._id,
+            title: 'Arrivo a Rivendell',
+            content: 'Dopo molti giorni di viaggio...',
+            chapterNumber: 2,
+            order: 2
+        });
+        console.log('✅ Capitolo 2 creato:', chapter2.title);
 
         console.log('\n✅ Database seeded con successo!');
         console.log('📊 Statistiche:');
         console.log(`   - Utenti: 2`);
         console.log(`   - Libri: 2`);
         console.log(`   - Capitoli: 2`);
-        
+
         await mongoose.connection.close();
         process.exit(0);
     } catch (error) {

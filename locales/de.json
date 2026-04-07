@@ -1,1 +1,10 @@
-{\n  "greeting": "Hallo",\n  "farewell": "Auf Wiedersehen",\n  "thank_you": "Danke",\n  "welcome": "Willkommen"\n}
+{
+  "welcome": "Willkommen",
+  "login": "Anmelden",
+  "logout": "Abmelden",
+  "error": "Fehler",
+  "success": "Erfolg",
+  "book": "Buch",
+  "chapter": "Kapitel",
+  "user": "Benutzer"
+}

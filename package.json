@@ -22,12 +22,22 @@
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
+    "express-rate-limit": "^7.5.0",
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^7.0.4"
   },
   "devDependencies": {
     "jest": "^29.5.0",
-    "nodemon": "^2.0.22"
+    "mongodb-memory-server": "^9.5.0",
+    "nodemon": "^2.0.22",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 30000,
+    "testMatch": [
+      "**/test/**/*.test.js"
+    ]
   },
   "engines": {
     "node": ">=18.0.0",

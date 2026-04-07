@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 const chapterSchema = new mongoose.Schema(
   {
-    bookId: {
+    book: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Book',
-      required: [true, "L'ID del libro è obbligatorio"]
+      required: [true, 'Il riferimento al libro è obbligatorio']
     },
     title: {
       type: String,
@@ -14,12 +14,21 @@ const chapterSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      default: ''
+      required: [true, 'Il contenuto del capitolo è obbligatorio']
+    },
+    chapterNumber: {
+      type: Number,
+      required: [true, 'Il numero del capitolo è obbligatorio'],
+      min: [1, 'Il numero del capitolo deve essere almeno 1']
     },
     order: {
       type: Number,
-      required: [true, "L'ordine del capitolo è obbligatorio"],
-      min: [1, "L'ordine deve essere almeno 1"]
+      default: 0
+    },
+    wordCount: {
+      type: Number,
+      default: 0,
+      min: 0
     }
   },
   {

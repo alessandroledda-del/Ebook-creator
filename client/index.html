@@ -1,19 +1,91 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ebook Creator</title>
     <style>
-        body { font-family: Arial; margin: 20px; }
-        .container { max-width: 800px; }
-        button { padding: 10px; cursor: pointer; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { color: #333; }
+
+        /* Auth section */
+        #authSection { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+        #authSection h2 { margin-top: 0; }
+        .form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .form-row input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex: 1; min-width: 150px; }
+        .form-row button { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; background: #0070f3; color: #fff; }
+        .form-row button:hover { background: #005bb5; }
+        #logoutBtn { background: #e00; }
+        #logoutBtn:hover { background: #b00; }
+
+        /* Create book section */
+        #bookSection { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+        #bookSection h2 { margin-top: 0; }
+        #createBookForm { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        #createBookForm input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex: 1; min-width: 140px; }
+        #createBookForm button { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; background: #28a745; color: #fff; }
+        #createBookForm button:hover { background: #1e7e34; }
+
+        /* Books list */
+        #booksContainer { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+        #booksContainer h2 { margin-top: 0; }
+        .book-item { border: 1px solid #e0e0e0; padding: 14px; margin-bottom: 10px; border-radius: 6px; background: #fafafa; }
+        .book-item h3 { margin: 0 0 6px; }
+        .book-item p { margin: 3px 0; font-size: 14px; color: #555; }
+        .book-actions { margin-top: 8px; display: flex; gap: 8px; }
+        .btn-edit { padding: 6px 12px; cursor: pointer; border: none; border-radius: 4px; background: #ffc107; }
+        .btn-delete { padding: 6px 12px; cursor: pointer; border: none; border-radius: 4px; background: #dc3545; color: #fff; }
+
+        /* Notification */
+        #notification { padding: 10px 16px; border-radius: 4px; margin-bottom: 16px; display: none; }
+        #notification.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #notification.error   { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📚 Ebook Creator</h1>
-        <button onclick="login()">Login</button>
-        <button onclick="createBook()">Crea Libro</button>
+
+        <div id="notification"></div>
+
+        <!-- Auth section -->
+        <div id="authSection">
+            <h2>🔐 Accesso</h2>
+            <div class="form-row">
+                <input type="email" id="loginEmail" placeholder="Email" />
+                <input type="password" id="loginPassword" placeholder="Password" />
+                <button onclick="login()">Accedi</button>
+                <button onclick="register()">Registrati</button>
+                <button id="logoutBtn" onclick="logout()" style="display:none">Esci</button>
+            </div>
+            <p id="authStatus" style="margin:8px 0 0; font-size:14px; color:#555;"></p>
+            <div class="form-row" id="registerRow" style="margin-top:10px;">
+                <input type="text" id="registerName" placeholder="Nome (per registrazione)" />
+            </div>
+        </div>
+
+        <!-- Create book section (visible only when logged in) -->
+        <div id="bookSection" style="display:none">
+            <h2>➕ Crea Nuovo Libro</h2>
+            <div id="createBookForm">
+                <input type="text"   id="bookTitle"  placeholder="Titolo *" />
+                <input type="text"   id="bookAuthor" placeholder="Autore *" />
+                <input type="number" id="bookPrice"  placeholder="Prezzo *" min="0" step="0.01" />
+                <input type="text"   id="bookGenre"  placeholder="Genere" />
+                <button onclick="createBook()">Crea Libro</button>
+            </div>
+        </div>
+
+        <!-- Books list -->
+        <div id="booksContainer">
+            <h2>📖 Libri</h2>
+            <div id="booksList"><p>Nessun libro trovato.</p></div>
+        </div>
     </div>
+
     <script src="app.js"></script>
 </body>
 </html>
+

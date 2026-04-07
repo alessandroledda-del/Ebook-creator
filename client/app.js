@@ -1,50 +1,123 @@
 // 📚 Ebook Creator Frontend - Application JavaScript
 
-// API Base URL
-const API_URL = 'http://localhost:3000/api';
+const API_URL = '/api';
 let authToken = localStorage.getItem('authToken');
+let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 
-// ========== LOGIN FUNCTION ==========
-async function login() {
-    const email = prompt('📧 Inserisci email:');
-    const password = prompt('🔐 Inserisci password:');
-    
-    if (!email || !password) {
-        alert('❌ Email e password sono obbligatori');
+// ========== NOTIFICATION ==========
+function showNotification(message, type = 'success') {
+    const el = document.getElementById('notification');
+    if (!el) return;
+    el.textContent = message;
+    el.className = type;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ========== UPDATE AUTH UI ==========
+function updateAuthUI() {
+    const bookSection = document.getElementById('bookSection');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const authStatus = document.getElementById('authStatus');
+
+    if (authToken && currentUser) {
+        if (bookSection) bookSection.style.display = 'block';
+        if (logoutBtn) logoutBtn.style.display = 'inline-block';
+        if (authStatus) authStatus.textContent = `Connesso come: ${currentUser.name} (${currentUser.email})`;
+    } else {
+        if (bookSection) bookSection.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (authStatus) authStatus.textContent = '';
+    }
+}
+
+// ========== REGISTER ==========
+async function register() {
+    const name = document.getElementById('registerName')?.value?.trim();
+    const email = document.getElementById('loginEmail')?.value?.trim();
+    const password = document.getElementById('loginPassword')?.value;
+
+    if (!name || !email || !password) {
+        showNotification('❌ Nome, email e password sono obbligatori', 'error');
         return;
     }
 
     try {
-        const response = await fetch(`${API_URL}/users/login`, {
+        const response = await fetch(`${API_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            authToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            showNotification(`✅ Benvenuto ${data.user.name}!`);
+            updateAuthUI();
+            loadBooks();
+        } else {
+            showNotification(`❌ ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`❌ Errore registrazione: ${error.message}`, 'error');
+        console.error(error);
+    }
+}
+
+// ========== LOGIN ==========
+async function login() {
+    const email = document.getElementById('loginEmail')?.value?.trim();
+    const password = document.getElementById('loginPassword')?.value;
+
+    if (!email || !password) {
+        showNotification('❌ Email e password sono obbligatori', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
 
         const data = await response.json();
-        
+
         if (response.ok) {
             authToken = data.token;
+            currentUser = data.user;
             localStorage.setItem('authToken', authToken);
-            alert(`✅ Benvenuto ${data.user.nome}!`);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            showNotification(`✅ Benvenuto ${data.user.name}!`);
+            updateAuthUI();
             loadBooks();
         } else {
-            alert(`❌ Errore: ${data.message}`);
+            showNotification(`❌ ${data.message}`, 'error');
         }
     } catch (error) {
-        alert(`❌ Errore login: ${error.message}`);
+        showNotification(`❌ Errore login: ${error.message}`, 'error');
         console.error(error);
     }
 }
 
-// ========== CREATE BOOK FUNCTION ==========
+// ========== CREATE BOOK ==========
 async function createBook() {
-    const titolo = prompt('📖 Titolo del libro:');
-    const autore = prompt('✍️  Autore:');
-    const descrizione = prompt('📝 Descrizione:');
-    
-    if (!titolo || !autore) {
-        alert('❌ Titolo e autore sono obbligatori');
+    const title = document.getElementById('bookTitle')?.value?.trim();
+    const author = document.getElementById('bookAuthor')?.value?.trim();
+    const price = parseFloat(document.getElementById('bookPrice')?.value);
+    const genre = document.getElementById('bookGenre')?.value?.trim();
+
+    if (!title || !author || isNaN(price)) {
+        showNotification('❌ Titolo, autore e prezzo sono obbligatori', 'error');
+        return;
+    }
+
+    if (!authToken) {
+        showNotification('❌ Devi effettuare il login prima', 'error');
         return;
     }
 
@@ -55,53 +128,61 @@ async function createBook() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${authToken}`
             },
-            body: JSON.stringify({ titolo, autore, descrizione })
+            body: JSON.stringify({ title, author, price, genre })
         });
 
         const data = await response.json();
-        
+
         if (response.ok) {
-            alert(`✅ Libro "${titolo}" creato con successo!`);
+            showNotification(`✅ Libro "${title}" creato con successo!`);
+            document.getElementById('bookTitle').value = '';
+            document.getElementById('bookAuthor').value = '';
+            document.getElementById('bookPrice').value = '';
+            document.getElementById('bookGenre').value = '';
             loadBooks();
         } else {
-            alert(`❌ Errore: ${data.error}`);
+            showNotification(`❌ ${data.error}`, 'error');
         }
     } catch (error) {
-        alert(`❌ Errore creazione libro: ${error.message}`);
+        showNotification(`❌ Errore creazione libro: ${error.message}`, 'error');
         console.error(error);
     }
 }
 
-// ========== LOAD BOOKS FUNCTION ==========
+// ========== LOAD BOOKS ==========
 async function loadBooks() {
     try {
         const response = await fetch(`${API_URL}/books`);
-        const books = await response.json();
-        
+        const data = await response.json();
+
         const booksList = document.getElementById('booksList');
-        
-        if (!booksList) {
-            console.log('📚 Libri caricati:', books);
+        if (!booksList) return;
+
+        const books = data.books || [];
+
+        if (books.length === 0) {
+            booksList.innerHTML = '<p>Nessun libro trovato.</p>';
             return;
         }
 
         booksList.innerHTML = '';
-        
-        if (books.length === 0) {
-            booksList.innerHTML = '<p>Nessun libro trovato</p>';
-            return;
-        }
-
         books.forEach(book => {
+            const isOwner = currentUser && book.userId && (
+                (typeof book.userId === 'string' ? book.userId : book.userId._id || book.userId.id) === currentUser.id
+            );
             const bookDiv = document.createElement('div');
             bookDiv.className = 'book-item';
             bookDiv.innerHTML = `
-                <h3>${book.titolo}</h3>
-                <p><strong>Autore:</strong> ${book.autore}</p>
-                <p><strong>Stato:</strong> ${book.statoCreazione}</p>
-                <p>${book.descrizione || 'Nessuna descrizione'}</p>
-                <button onclick="editBook('${book._id}')">✏️ Modifica</button>
-                <button onclick="deleteBook('${book._id}')">🗑️ Elimina</button>
+                <h3>${book.title}</h3>
+                <p><strong>Autore:</strong> ${book.author}</p>
+                <p><strong>Prezzo:</strong> €${(book.price || 0).toFixed(2)}</p>
+                <p><strong>Stato:</strong> ${book.status || '-'}</p>
+                <p>${book.description || ''}</p>
+                ${isOwner ? `
+                <div class="book-actions">
+                    <button class="btn-edit" onclick="editBook('${book._id}')">✏️ Modifica</button>
+                    <button class="btn-delete" onclick="deleteBook('${book._id}')">🗑️ Elimina</button>
+                </div>` : ''}
             `;
             booksList.appendChild(bookDiv);
         });
@@ -110,11 +191,11 @@ async function loadBooks() {
     }
 }
 
-// ========== EDIT BOOK FUNCTION ==========
+// ========== EDIT BOOK ==========
 async function editBook(bookId) {
-    const newTitle = prompt('📖 Nuovo titolo:');
-    const newAuthor = prompt('✍️  Nuovo autore:');
-    
+    const newTitle = window.prompt('📖 Nuovo titolo:');
+    const newAuthor = window.prompt('✍️  Nuovo autore:');
+
     if (!newTitle || !newAuthor) return;
 
     try {
@@ -124,55 +205,58 @@ async function editBook(bookId) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${authToken}`
             },
-            body: JSON.stringify({ titolo: newTitle, autore: newAuthor })
+            body: JSON.stringify({ title: newTitle, author: newAuthor })
         });
 
         if (response.ok) {
-            alert('✅ Libro aggiornato!');
+            showNotification('✅ Libro aggiornato!');
             loadBooks();
         } else {
-            alert('❌ Errore aggiornamento');
+            const data = await response.json();
+            showNotification(`❌ ${data.error}`, 'error');
         }
     } catch (error) {
         console.error('❌ Errore:', error);
     }
 }
 
-// ========== DELETE BOOK FUNCTION ==========
+// ========== DELETE BOOK ==========
 async function deleteBook(bookId) {
-    if (!confirm('Sei sicuro di voler eliminare questo libro?')) return;
+    if (!window.confirm('Sei sicuro di voler eliminare questo libro?')) return;
 
     try {
         const response = await fetch(`${API_URL}/books/${bookId}`, {
             method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
+            headers: { 'Authorization': `Bearer ${authToken}` }
         });
 
         if (response.ok) {
-            alert('✅ Libro eliminato!');
+            showNotification('✅ Libro eliminato!');
             loadBooks();
         } else {
-            alert('❌ Errore eliminazione');
+            const data = await response.json();
+            showNotification(`❌ ${data.error}`, 'error');
         }
     } catch (error) {
         console.error('❌ Errore:', error);
     }
 }
 
-// ========== LOGOUT FUNCTION ==========
+// ========== LOGOUT ==========
 function logout() {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('currentUser');
     authToken = null;
-    alert('✅ Logout effettuato');
-    location.reload();
+    currentUser = null;
+    showNotification('✅ Logout effettuato');
+    updateAuthUI();
+    loadBooks();
 }
 
 // ========== INITIALIZE APP ==========
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Ebook Creator app avviata');
-    if (authToken) {
-        loadBooks();
-    }
+    updateAuthUI();
+    loadBooks();
 });
+

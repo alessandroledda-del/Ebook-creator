@@ -2,6 +2,11 @@ const mongoose = require('mongoose');
 
 const bookSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, "Il riferimento all'utente è obbligatorio"]
+    },
     title: {
       type: String,
       required: [true, 'Il titolo è obbligatorio'],
@@ -17,6 +22,7 @@ const bookSchema = new mongoose.Schema(
     },
     language: {
       type: String,
+      enum: ['it', 'en', 'de'],
       default: 'it',
       trim: true
     },
@@ -27,6 +33,10 @@ const bookSchema = new mongoose.Schema(
     },
     content: {
       type: String
+    },
+    tags: {
+      type: [String],
+      default: []
     },
     coverImageUrl: {
       type: String,
@@ -44,6 +54,11 @@ const bookSchema = new mongoose.Schema(
       type: Number,
       required: [true, 'Il prezzo è obbligatorio'],
       min: [0, 'Il prezzo non può essere negativo']
+    },
+    status: {
+      type: String,
+      enum: ['draft', 'in-review', 'published'],
+      default: 'draft'
     },
     generationStatus: {
       type: String,

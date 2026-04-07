@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema(
   {
-    nome: {
+    name: {
       type: String,
       required: [true, 'Il nome è obbligatorio'],
       trim: true
@@ -12,13 +12,23 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "L'email è obbligatoria"],
       unique: true,
-      trim: true,
-      lowercase: true
+      lowercase: true,
+      trim: true
     },
     password: {
       type: String,
       required: [true, 'La password è obbligatoria'],
       minlength: [6, 'La password deve avere almeno 6 caratteri']
+    },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user'
+    },
+    language: {
+      type: String,
+      enum: ['it', 'en', 'de'],
+      default: 'it'
     }
   },
   {
@@ -32,8 +42,8 @@ userSchema.pre('save', async function (next) {
   next();
 });
 
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+userSchema.methods.comparePassword = async function (plainPassword) {
+  return bcrypt.compare(plainPassword, this.password);
 };
 
 const User = mongoose.model('User', userSchema);
