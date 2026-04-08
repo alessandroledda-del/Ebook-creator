@@ -5,7 +5,13 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+if (!process.env.MONGO_URI) {
+  console.error('❌ MONGO_URI non configurato. Imposta MONGO_URI nel file .env');
+  process.exit(1);
+}
+
 const express = require('express');
+const cors = require('cors');
 const path = require('path');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
@@ -18,6 +24,7 @@ const chaptersRouter = require('./routes/chapters');
 const app = express();
 
 // Middleware globali
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('client'));
