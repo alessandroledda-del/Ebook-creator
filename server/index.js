@@ -10,6 +10,7 @@ const path = require('path');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 
+const authRoutes = require('./routes/auth');
 const booksRouter = require('./routes/books');
 const usersRouter = require('./routes/users');
 const chaptersRouter = require('./routes/chapters');
@@ -28,14 +29,17 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/books', bookRoutes);
-app.use('/api/books/:bookId/chapters', chapterRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/books', booksRouter);
+app.use('/api/books/:bookId/chapters', chaptersRouter);
+app.use('/api/users', usersRouter);
 
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint non trovato' });
 });
+
+// Error handler
+app.use(errorHandler);
 
 // Avvio server solo quando eseguito direttamente (non quando importato dai test)
 if (require.main === module) {
