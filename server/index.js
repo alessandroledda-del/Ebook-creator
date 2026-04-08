@@ -50,13 +50,19 @@ app.use(errorHandler);
 
 // Avvio server solo quando eseguito direttamente (non quando importato dai test)
 if (require.main === module) {
+  console.log('🚀 Avvio server...');
   const PORT = process.env.PORT || 3000;
-  connectDB().then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server in ascolto sulla porta ${PORT}`);
-      console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  connectDB()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Server in ascolto sulla porta ${PORT}`);
+        console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+      });
+    })
+    .catch((err) => {
+      console.error('❌ Errore fatale durante l\'avvio:', err.message);
+      process.exit(1);
     });
-  });
 }
 
 module.exports = app;
