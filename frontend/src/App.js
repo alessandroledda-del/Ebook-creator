@@ -7,6 +7,8 @@ import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import CreateBook from "@/pages/CreateBook";
 import BookView from "@/pages/BookView";
+import Credits from "@/pages/Credits";
+import PublicBook from "@/pages/PublicBook";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 function AppRouter() {
@@ -42,6 +44,15 @@ function AppRouter() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/crediti"
+        element={
+          <ProtectedRoute>
+            <Credits />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/p/:publicId" element={<PublicBook />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

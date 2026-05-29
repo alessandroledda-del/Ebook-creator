@@ -27,10 +27,14 @@
 - Lettore con indice capitoli, tema editoriale (Playfair + Manrope)
 
 ## Backlog
-- P1: Generazione "appearance" personaggi con immagine AI
-- P1: Esportazione libro (PDF/ePub)
-- P2: Rigenerazione/modifica singolo capitolo
-- P2: Condivisione pubblica del libro
+- P2: rigenerazione copertina con immagine di riferimento — FATTO (Nano Banana editing)
+- P2: condivisione pubblica read-only — FATTO (`/p/{public_id}`)
+- Monetizzazione crediti Stripe — FATTO (pacchetti Starter/Plus/Pro, benvenuto 15 cr)
+- Futuro: gestione fatture/ricevute, piani in abbonamento, analytics di lettura sui link pubblici
+
+## Note crediti
+- Costi: testo (outline/capitolo/rigenerazione)=1, immagini (copertina/ritratto)=2
+- Pacchetti: Starter 25/€4,99 · Plus 70/€11,99 · Pro 180/€24,99 · benvenuto 15
 
 ## Note
 - Budget Emergent LLM Key esaurito durante i test → ricarica necessaria per nuove generazioni.

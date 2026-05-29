@@ -13,6 +13,9 @@ from datetime import datetime, timezone, timedelta
 import httpx
 
 import ai_service
+from emergentintegrations.payments.stripe.checkout import (
+    StripeCheckout, CheckoutSessionRequest,
+)
 
 import io
 from reportlab.lib.pagesizes import A5
@@ -116,6 +119,40 @@ class User(BaseModel):
     email: str
     name: str
     picture: Optional[str] = ""
+    credits: int = 0
+
+
+# ---------------------- Credits / Payments config ----------------------
+WELCOME_CREDITS = 15
+
+CREDIT_COSTS = {
+    "outline": 1,
+    "chapter": 1,
+    "regenerate": 1,
+    "cover": 2,
+    "portrait": 2,
+}
+
+CREDIT_PACKAGES = {
+    "starter": {"name": "Starter", "credits": 25, "amount": 4.99, "currency": "eur"},
+    "plus": {"name": "Plus", "credits": 70, "amount": 11.99, "currency": "eur"},
+    "pro": {"name": "Pro", "credits": 180, "amount": 24.99, "currency": "eur"},
+}
+
+
+async def ensure_credits(user_id: str, action: str):
+    cost = CREDIT_COSTS.get(action, 1)
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if (user.get("credits") or 0) < cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Crediti insufficienti: servono {cost} crediti per questa azione.",
+        )
+    return cost
+
+
+async def deduct_credits(user_id: str, cost: int):
+    await db.users.update_one({"user_id": user_id}, {"$inc": {"credits": -cost}})
 
 
 class Character(BaseModel):
@@ -153,6 +190,7 @@ class CharacterInput(BaseModel):
 class CoverRequest(BaseModel):
     model: str = "gemini-nano-banana"
     style: Optional[str] = "elegante e cinematografico"
+    reference_image: Optional[str] = None
 
 
 # ---------------------- Auth helpers ----------------------
@@ -204,10 +242,10 @@ async def process_session(request: Request, response: Response):
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": data.get("name", ""), "picture": data.get("picture", "")}},
-        )
+        update_fields = {"name": data.get("name", ""), "picture": data.get("picture", "")}
+        if existing.get("credits") is None:
+            update_fields["credits"] = WELCOME_CREDITS
+        await db.users.update_one({"user_id": user_id}, {"$set": update_fields})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
@@ -215,6 +253,7 @@ async def process_session(request: Request, response: Response):
             "email": email,
             "name": data.get("name", ""),
             "picture": data.get("picture", ""),
+            "credits": WELCOME_CREDITS,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -384,6 +423,7 @@ async def generate_outline_ep(book_id: str, user: User = Depends(get_current_use
     doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Libro non trovato")
+    cost = await ensure_credits(user.user_id, "outline")
     try:
         result = await ai_service.generate_outline(
             idea=doc["idea"],
@@ -424,6 +464,7 @@ async def generate_outline_ep(book_id: str, user: User = Depends(get_current_use
         "status": "in_scrittura",
     }
     await db.books.update_one({"id": book_id}, {"$set": update})
+    await deduct_credits(user.user_id, cost)
     doc.update(update)
     return doc
 
@@ -438,6 +479,7 @@ async def generate_chapter_ep(
     capitoli = doc.get("capitoli", [])
     if payload.index < 0 or payload.index >= len(capitoli):
         raise HTTPException(status_code=400, detail="Indice capitolo non valido")
+    cost = await ensure_credits(user.user_id, "chapter")
     try:
         contenuto = await ai_service.generate_chapter(doc, payload.index)
     except Exception as e:
@@ -450,6 +492,7 @@ async def generate_chapter_ep(
     await db.books.update_one(
         {"id": book_id}, {"$set": {"capitoli": capitoli, "status": status}}
     )
+    await deduct_credits(user.user_id, cost)
     return {
         "index": payload.index,
         "titolo": capitoli[payload.index]["titolo"],
@@ -470,6 +513,7 @@ async def regenerate_chapter_ep(
     capitoli = doc.get("capitoli", [])
     if payload.index < 0 or payload.index >= len(capitoli):
         raise HTTPException(status_code=400, detail="Indice capitolo non valido")
+    cost = await ensure_credits(user.user_id, "regenerate")
     try:
         contenuto = await ai_service.generate_chapter(
             doc, payload.index, instruction=payload.instruction
@@ -480,6 +524,7 @@ async def regenerate_chapter_ep(
 
     capitoli[payload.index]["contenuto"] = contenuto
     await db.books.update_one({"id": book_id}, {"$set": {"capitoli": capitoli}})
+    await deduct_credits(user.user_id, cost)
     return {
         "index": payload.index,
         "titolo": capitoli[payload.index]["titolo"],
@@ -499,6 +544,7 @@ async def generate_character_portrait(
     target = next((c for c in chars if c.get("id") == char_id), None)
     if not target:
         raise HTTPException(status_code=404, detail="Personaggio non trovato")
+    cost = await ensure_credits(user.user_id, "portrait")
     try:
         image = await ai_service.generate_portrait(target, model=payload.model)
     except Exception as e:
@@ -507,6 +553,7 @@ async def generate_character_portrait(
 
     target["immagine"] = image
     await db.books.update_one({"id": book_id}, {"$set": {"characters": chars}})
+    await deduct_credits(user.user_id, cost)
     return {"char_id": char_id, "immagine": image}
 
 
@@ -534,6 +581,7 @@ async def generate_book_cover(
     doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Libro non trovato")
+    cost = await ensure_credits(user.user_id, "cover")
     try:
         cover = await ai_service.generate_cover(
             title=doc.get("titolo") or doc.get("idea", "Libro"),
@@ -541,6 +589,7 @@ async def generate_book_cover(
             sinossi=doc.get("sinossi", "") or doc.get("idea", ""),
             model=payload.model,
             style=payload.style,
+            reference_image=payload.reference_image,
         )
     except Exception as e:
         logger.error(f"Generazione copertina fallita: {e}")
@@ -550,6 +599,7 @@ async def generate_book_cover(
         {"id": book_id},
         {"$set": {"cover_image": cover, "cover_model": payload.model}},
     )
+    await deduct_credits(user.user_id, cost)
     return {"cover_image": cover, "cover_model": payload.model}
 
 
@@ -600,6 +650,156 @@ async def delete_character(
     if res.modified_count == 0:
         raise HTTPException(status_code=404, detail="Personaggio non trovato")
     return {"ok": True}
+
+# ---------------------- Public sharing ----------------------
+class ShareRequest(BaseModel):
+    public: bool = True
+
+
+@api_router.post("/books/{book_id}/share")
+async def share_book(
+    book_id: str, payload: ShareRequest, user: User = Depends(get_current_user)
+):
+    doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    if payload.public:
+        public_id = doc.get("public_id") or uuid.uuid4().hex[:16]
+        await db.books.update_one(
+            {"id": book_id}, {"$set": {"is_public": True, "public_id": public_id}}
+        )
+        return {"is_public": True, "public_id": public_id}
+    await db.books.update_one({"id": book_id}, {"$set": {"is_public": False}})
+    return {"is_public": False, "public_id": doc.get("public_id", "")}
+
+
+@api_router.get("/public/books/{public_id}")
+async def public_book(public_id: str):
+    doc = await db.books.find_one(
+        {"public_id": public_id, "is_public": True},
+        {"_id": 0, "user_id": 0, "idea": 0, "num_capitoli_richiesti": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato o non pubblico")
+    return doc
+
+
+# ---------------------- Stripe payments ----------------------
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
+
+
+class CheckoutRequest(BaseModel):
+    package_id: str
+    origin_url: str
+
+
+def _stripe(request: Request) -> StripeCheckout:
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url}api/webhook/stripe"
+    return StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+
+async def _grant_credits_once(session_id: str):
+    """Grant package credits exactly once for a paid session."""
+    txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not txn:
+        return
+    res = await db.payment_transactions.update_one(
+        {"session_id": session_id, "credits_granted": {"$ne": True}},
+        {"$set": {"credits_granted": True}},
+    )
+    if res.modified_count == 1:
+        await db.users.update_one(
+            {"user_id": txn["user_id"]}, {"$inc": {"credits": txn["credits"]}}
+        )
+
+
+@api_router.get("/payments/packages")
+async def list_packages():
+    return [{"id": k, **v} for k, v in CREDIT_PACKAGES.items()]
+
+
+@api_router.post("/payments/checkout")
+async def create_checkout(
+    payload: CheckoutRequest, request: Request, user: User = Depends(get_current_user)
+):
+    if payload.package_id not in CREDIT_PACKAGES:
+        raise HTTPException(status_code=400, detail="Pacchetto non valido")
+    pkg = CREDIT_PACKAGES[payload.package_id]
+    stripe_checkout = _stripe(request)
+    success_url = f"{payload.origin_url}/crediti?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{payload.origin_url}/crediti"
+    metadata = {
+        "user_id": user.user_id,
+        "package_id": payload.package_id,
+        "credits": str(pkg["credits"]),
+    }
+    req = CheckoutSessionRequest(
+        amount=float(pkg["amount"]),
+        currency=pkg["currency"],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata=metadata,
+    )
+    session = await stripe_checkout.create_checkout_session(req)
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id,
+        "user_id": user.user_id,
+        "package_id": payload.package_id,
+        "credits": pkg["credits"],
+        "amount": float(pkg["amount"]),
+        "currency": pkg["currency"],
+        "payment_status": "initiated",
+        "status": "initiated",
+        "credits_granted": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"url": session.url, "session_id": session.session_id}
+
+
+@api_router.get("/payments/status/{session_id}")
+async def payment_status(
+    session_id: str, request: Request, user: User = Depends(get_current_user)
+):
+    txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transazione non trovata")
+    stripe_checkout = _stripe(request)
+    status = await stripe_checkout.get_checkout_status(session_id)
+    await db.payment_transactions.update_one(
+        {"session_id": session_id},
+        {"$set": {"status": status.status, "payment_status": status.payment_status}},
+    )
+    if status.payment_status == "paid":
+        await _grant_credits_once(session_id)
+    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    return {
+        "payment_status": status.payment_status,
+        "status": status.status,
+        "credits": user_doc.get("credits", 0),
+        "package_credits": txn["credits"],
+    }
+
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature")
+    stripe_checkout = _stripe(request)
+    try:
+        event = await stripe_checkout.handle_webhook(body, sig)
+    except Exception as e:
+        logger.error(f"Webhook Stripe non valido: {e}")
+        raise HTTPException(status_code=400, detail="Webhook non valido")
+    if event.payment_status == "paid":
+        await db.payment_transactions.update_one(
+            {"session_id": event.session_id},
+            {"$set": {"payment_status": "paid", "status": "complete"}},
+        )
+        await _grant_credits_once(event.session_id)
+    return {"ok": True}
+
+
 
 
 @api_router.get("/")

@@ -20,6 +20,16 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await api.get("/auth/me");
+      setUser(res.data);
+      return res.data;
+    } catch {
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     // CRITICAL: If returning from OAuth callback, skip the /me check.
     // AuthCallback will exchange the session_id and establish the session first.
@@ -47,7 +57,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, checkAuth, login, logout }}>
+    <AuthContext.Provider value={{ user, setUser, loading, checkAuth, refreshUser, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

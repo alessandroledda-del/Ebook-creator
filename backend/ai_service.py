@@ -13,7 +13,7 @@ import uuid
 from dotenv import load_dotenv
 from pathlib import Path
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
 
 ROOT_DIR = Path(__file__).parent
@@ -328,12 +328,19 @@ def _cover_prompt(title: str, genere: str, sinossi: str, style: str) -> str:
 
 
 async def generate_cover(title: str, genere: str, sinossi: str, model: str,
-                         style: str) -> str:
-    """Generate a book cover. Returns a base64 data URI (PNG)."""
+                         style: str, reference_image: str = None) -> str:
+    """Generate a book cover. Returns a base64 data URI (PNG/JPEG).
+    An optional reference_image (data URI or raw base64) guides the result
+    (supported only via Nano Banana editing)."""
     prompt = _cover_prompt(title, genere, sinossi, style or "elegante e cinematografico")
     image_model = "gpt-image-1" if model == "gpt-image-1" else "gemini-nano-banana"
 
+    ref_b64 = None
+    if reference_image:
+        ref_b64 = reference_image.split(",", 1)[1] if "," in reference_image else reference_image
+
     if image_model == "gpt-image-1":
+        # GPT Image 1 (text-to-image only): reference image is not supported.
         gen = OpenAIImageGeneration(api_key=EMERGENT_LLM_KEY)
         images = await gen.generate_images(
             prompt=prompt, model="gpt-image-1", number_of_images=1, quality="medium"
@@ -343,7 +350,7 @@ async def generate_cover(title: str, genere: str, sinossi: str, model: str,
         b64 = base64.b64encode(images[0]).decode("utf-8")
         return f"data:image/png;base64,{b64}"
 
-    # Gemini Nano Banana
+    # Gemini Nano Banana (supports editing from a reference image)
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=f"cover-{uuid.uuid4().hex}",
@@ -351,9 +358,19 @@ async def generate_cover(title: str, genere: str, sinossi: str, model: str,
     ).with_model("gemini", IMAGE_MODELS["gemini-nano-banana"]).with_params(
         modalities=["image", "text"]
     )
-    _text, images = await chat.send_message_multimodal_response(
-        UserMessage(text=prompt)
-    )
+
+    if ref_b64:
+        msg = UserMessage(
+            text=(
+                "Use the provided image as visual reference (composition, subject, mood). "
+                + prompt
+            ),
+            file_contents=[ImageContent(ref_b64)],
+        )
+    else:
+        msg = UserMessage(text=prompt)
+
+    _text, images = await chat.send_message_multimodal_response(msg)
     if not images:
         raise ValueError("Nessuna immagine generata (Nano Banana)")
     img = images[0]

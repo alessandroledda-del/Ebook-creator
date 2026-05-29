@@ -6,6 +6,7 @@ import { Feather, Plus, UserPlus, Trash2, Wand2, ArrowLeft } from "lucide-react"
 import Header from "@/components/Header";
 import CharacterDialog from "@/components/CharacterDialog";
 import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,7 @@ import { Progress } from "@/components/ui/progress";
 
 export default function CreateBook() {
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const [idea, setIdea] = useState("");
   const [genere, setGenere] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-5-20250929");
@@ -75,9 +77,16 @@ export default function CreateBook() {
       }
 
       setProgress({ current: total, total, label: "Ultimi ritocchi…" });
+      await refreshUser();
       toast.success("Il tuo libro è pronto!");
       navigate(`/book/${bookId}`);
     } catch (e) {
+      if (e?.response?.status === 402) {
+        toast.error("Crediti insufficienti. Acquista crediti per continuare.");
+        await refreshUser();
+        navigate("/crediti");
+        return;
+      }
       toast.error("Generazione fallita. Riprova.");
       setGenerating(false);
     }

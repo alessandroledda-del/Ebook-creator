@@ -15,13 +15,25 @@ import {
   HeartCrack,
   Download,
   RotateCcw,
+  Share2,
+  Copy,
+  Check,
+  Upload,
+  X,
 } from "lucide-react";
 import Header from "@/components/Header";
 import CharacterDialog from "@/components/CharacterDialog";
 import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -36,6 +48,7 @@ const CHAR_PLACEHOLDER = "https://static.prod-images.emergentagent.com/jobs/ee7f
 export default function BookView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeChapter, setActiveChapter] = useState(0);
@@ -49,6 +62,13 @@ export default function BookView() {
   const [coverStyle, setCoverStyle] = useState("elegante e cinematografico");
   const [coverLoading, setCoverLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [referenceImage, setReferenceImage] = useState(null);
+  const [referenceName, setReferenceName] = useState("");
+
+  // sharing
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // chapter regeneration
   const [regenerating, setRegenerating] = useState(false);
@@ -112,9 +132,15 @@ export default function BookView() {
         return { ...b, capitoli: caps };
       });
       setCustomInstr("");
+      await refreshUser();
       toast.success("Capitolo rigenerato");
-    } catch {
-      toast.error("Rigenerazione non riuscita");
+    } catch (e) {
+      if (e?.response?.status === 402) {
+        toast.error("Crediti insufficienti per rigenerare.");
+        navigate("/crediti");
+      } else {
+        toast.error("Rigenerazione non riuscita");
+      }
     } finally {
       setRegenerating(false);
     }
@@ -132,9 +158,15 @@ export default function BookView() {
           c.id === charId ? { ...c, immagine: res.data.immagine } : c
         ),
       }));
+      await refreshUser();
       toast.success("Ritratto generato");
-    } catch {
-      toast.error("Generazione ritratto fallita");
+    } catch (e) {
+      if (e?.response?.status === 402) {
+        toast.error("Crediti insufficienti per il ritratto.");
+        navigate("/crediti");
+      } else {
+        toast.error("Generazione ritratto fallita");
+      }
     } finally {
       setPortraitLoading(null);
     }
@@ -162,13 +194,64 @@ export default function BookView() {
   const generateCover = async () => {
     setCoverLoading(true);
     try {
-      const res = await api.post(`/books/${id}/cover`, { model: coverModel, style: coverStyle });
+      const res = await api.post(`/books/${id}/cover`, {
+        model: coverModel,
+        style: coverStyle,
+        reference_image: referenceImage,
+      });
       setBook((b) => ({ ...b, cover_image: res.data.cover_image, cover_model: res.data.cover_model }));
+      await refreshUser();
       toast.success("Copertina generata!");
-    } catch {
-      toast.error("Generazione copertina fallita");
+    } catch (e) {
+      if (e?.response?.status === 402) {
+        toast.error("Crediti insufficienti per la copertina.");
+        navigate("/crediti");
+      } else {
+        toast.error("Generazione copertina fallita");
+      }
     } finally {
       setCoverLoading(false);
+    }
+  };
+
+  const onReferenceSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Immagine troppo grande (max 5MB)");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setReferenceImage(reader.result);
+      setReferenceName(file.name);
+      if (coverModel === "gpt-image-1") setCoverModel("gemini-nano-banana");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const toggleShare = async (makePublic) => {
+    setSharing(true);
+    try {
+      const res = await api.post(`/books/${id}/share`, { public: makePublic });
+      setBook((b) => ({ ...b, is_public: res.data.is_public, public_id: res.data.public_id }));
+      toast.success(makePublic ? "Libro reso pubblico" : "Condivisione disattivata");
+    } catch {
+      toast.error("Operazione non riuscita");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const shareUrl = book?.public_id ? `${window.location.origin}/p/${book.public_id}` : "";
+
+  const copyShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error("Copia non riuscita");
     }
   };
 
@@ -217,15 +300,25 @@ export default function BookView() {
             )}
             <p className="text-base text-[#57534E] leading-relaxed mt-4 max-w-2xl">{book.sinossi}</p>
             {book.status === "completato" && (
-              <button
-                onClick={downloadPdf}
-                disabled={downloading}
-                data-testid="download-pdf-btn"
-                className="mt-6 inline-flex items-center gap-2 border border-[#722F37] text-[#722F37] hover:bg-[#722F37] hover:text-white rounded-sm px-5 py-2.5 text-sm font-medium transition-colors duration-300 disabled:opacity-60"
-              >
-                <Download className="w-4 h-4" strokeWidth={1.5} />
-                {downloading ? "Preparazione…" : "Scarica PDF"}
-              </button>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={downloadPdf}
+                  disabled={downloading}
+                  data-testid="download-pdf-btn"
+                  className="inline-flex items-center gap-2 border border-[#722F37] text-[#722F37] hover:bg-[#722F37] hover:text-white rounded-sm px-5 py-2.5 text-sm font-medium transition-colors duration-300 disabled:opacity-60"
+                >
+                  <Download className="w-4 h-4" strokeWidth={1.5} />
+                  {downloading ? "Preparazione…" : "Scarica PDF"}
+                </button>
+                <button
+                  onClick={() => setShareOpen(true)}
+                  data-testid="share-book-btn"
+                  className="inline-flex items-center gap-2 border border-[#E7E5E4] text-[#1C1917] hover:border-[#722F37] hover:text-[#722F37] rounded-sm px-5 py-2.5 text-sm font-medium transition-colors duration-300"
+                >
+                  <Share2 className="w-4 h-4" strokeWidth={1.5} />
+                  {book.is_public ? "Gestisci condivisione" : "Condividi"}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -496,6 +589,35 @@ export default function BookView() {
                       className="bg-transparent border-0 border-b-2 border-[#E7E5E4] rounded-none focus-visible:ring-0 focus:border-[#722F37] px-0 mt-2"
                     />
                   </div>
+                  <div>
+                    <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
+                      Immagine di riferimento (opzionale)
+                    </Label>
+                    <p className="text-xs text-[#57534E] mt-1 mb-3">
+                      Guida la composizione caricando un'immagine. Disponibile con Nano Banana.
+                    </p>
+                    {referenceImage ? (
+                      <div className="flex items-center gap-3">
+                        <img src={referenceImage} alt="riferimento" className="w-16 h-16 object-cover rounded-sm border border-[#E7E5E4]" data-testid="reference-preview" />
+                        <span className="text-sm text-[#57534E] truncate max-w-[160px]">{referenceName}</span>
+                        <button
+                          onClick={() => { setReferenceImage(null); setReferenceName(""); }}
+                          data-testid="remove-reference-btn"
+                          className="text-[#57534E] hover:text-[#722F37]"
+                        >
+                          <X className="w-4 h-4" strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label
+                        data-testid="reference-upload-label"
+                        className="inline-flex items-center gap-2 border border-dashed border-[#E7E5E4] hover:border-[#722F37] rounded-sm px-4 py-2.5 text-sm text-[#57534E] cursor-pointer transition-colors"
+                      >
+                        <Upload className="w-4 h-4" strokeWidth={1.5} /> Carica immagine
+                        <input type="file" accept="image/*" className="hidden" onChange={onReferenceSelect} data-testid="reference-input" />
+                      </label>
+                    )}
+                  </div>
                   <button
                     onClick={generateCover}
                     disabled={coverLoading}
@@ -525,6 +647,62 @@ export default function BookView() {
         onSave={saveCharacter}
         initial={editChar}
       />
+
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="bg-[#FDFBF7] border-[#E7E5E4] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl text-[#1C1917]">Condividi il libro</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            {book.is_public ? (
+              <>
+                <p className="text-sm text-[#57534E] mb-4">
+                  Chiunque abbia questo link può leggere il libro (sola lettura).
+                </p>
+                <div className="flex items-center gap-2 mb-6">
+                  <Input
+                    readOnly
+                    value={shareUrl}
+                    data-testid="share-url-input"
+                    className="rounded-sm border-[#E7E5E4] text-sm"
+                  />
+                  <button
+                    onClick={copyShareUrl}
+                    data-testid="copy-share-url-btn"
+                    className="shrink-0 flex items-center gap-1.5 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-4 py-2.5 text-sm font-medium transition-colors"
+                  >
+                    {copied ? <Check className="w-4 h-4" strokeWidth={2} /> : <Copy className="w-4 h-4" strokeWidth={1.5} />}
+                    {copied ? "Copiato" : "Copia"}
+                  </button>
+                </div>
+                <button
+                  onClick={() => toggleShare(false)}
+                  disabled={sharing}
+                  data-testid="unshare-btn"
+                  className="text-sm text-[#722F37] hover:underline disabled:opacity-60"
+                >
+                  Disattiva condivisione pubblica
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-[#57534E] mb-6">
+                  Crea un link pubblico in sola lettura con copertina, capitoli e personaggi.
+                </p>
+                <button
+                  onClick={() => toggleShare(true)}
+                  disabled={sharing}
+                  data-testid="make-public-btn"
+                  className="flex items-center gap-2 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-6 py-3 text-sm font-medium transition-colors disabled:opacity-60"
+                >
+                  <Share2 className="w-4 h-4" strokeWidth={1.5} />
+                  {sharing ? "Attivazione…" : "Genera link pubblico"}
+                </button>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

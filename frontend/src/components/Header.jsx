@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Feather, LogOut, LibraryBig, PenLine } from "lucide-react";
+import { Feather, LogOut, LibraryBig, PenLine, Coins } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   DropdownMenu,
@@ -24,6 +24,16 @@ export default function Header() {
         </Link>
 
         <nav className="flex items-center gap-3">
+          <button
+            onClick={() => navigate("/crediti")}
+            data-testid="header-credits-btn"
+            title="I tuoi crediti"
+            className="flex items-center gap-1.5 border border-[#E7E5E4] hover:border-[#722F37] rounded-sm px-3 py-2 text-sm font-medium text-[#1C1917] transition-colors duration-300"
+          >
+            <Coins className="w-4 h-4 text-[#722F37]" strokeWidth={1.5} />
+            <span data-testid="credits-count">{user?.credits ?? 0}</span>
+            <span className="hidden sm:inline text-[#57534E] font-normal">crediti</span>
+          </button>
           <button
             onClick={() => navigate("/crea")}
             data-testid="header-new-book-btn"
@@ -52,6 +62,9 @@ export default function Header() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate("/dashboard")} data-testid="menu-library">
                   <LibraryBig className="w-4 h-4 mr-2" strokeWidth={1.5} /> La mia libreria
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/crediti")} data-testid="menu-credits">
+                  <Coins className="w-4 h-4 mr-2" strokeWidth={1.5} /> Crediti ({user.credits ?? 0})
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout} data-testid="logout-btn" className="text-[#722F37]">
                   <LogOut className="w-4 h-4 mr-2" strokeWidth={1.5} /> Esci
