@@ -370,6 +370,15 @@ class ChapterRequest(BaseModel):
     index: int
 
 
+class RegenerateChapterRequest(BaseModel):
+    index: int
+    instruction: str = ""
+
+
+class PortraitRequest(BaseModel):
+    model: str = "gemini-nano-banana"
+
+
 @api_router.post("/books/{book_id}/generate-outline")
 async def generate_outline_ep(book_id: str, user: User = Depends(get_current_user)):
     doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
@@ -448,6 +457,59 @@ async def generate_chapter_ep(
         "done": done,
         "status": status,
     }
+
+
+@api_router.post("/books/{book_id}/regenerate-chapter")
+async def regenerate_chapter_ep(
+    book_id: str, payload: RegenerateChapterRequest,
+    user: User = Depends(get_current_user),
+):
+    doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    capitoli = doc.get("capitoli", [])
+    if payload.index < 0 or payload.index >= len(capitoli):
+        raise HTTPException(status_code=400, detail="Indice capitolo non valido")
+    try:
+        contenuto = await ai_service.generate_chapter(
+            doc, payload.index, instruction=payload.instruction
+        )
+    except Exception as e:
+        logger.error(f"Rigenerazione capitolo fallita: {e}")
+        raise HTTPException(status_code=500, detail=f"Rigenerazione fallita: {str(e)}")
+
+    capitoli[payload.index]["contenuto"] = contenuto
+    await db.books.update_one({"id": book_id}, {"$set": {"capitoli": capitoli}})
+    return {
+        "index": payload.index,
+        "titolo": capitoli[payload.index]["titolo"],
+        "contenuto": contenuto,
+    }
+
+
+@api_router.post("/books/{book_id}/characters/{char_id}/portrait")
+async def generate_character_portrait(
+    book_id: str, char_id: str, payload: PortraitRequest,
+    user: User = Depends(get_current_user),
+):
+    doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    chars = doc.get("characters", [])
+    target = next((c for c in chars if c.get("id") == char_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Personaggio non trovato")
+    try:
+        image = await ai_service.generate_portrait(target, model=payload.model)
+    except Exception as e:
+        logger.error(f"Generazione ritratto fallita: {e}")
+        raise HTTPException(status_code=500, detail=f"Ritratto fallito: {str(e)}")
+
+    target["immagine"] = image
+    await db.books.update_one({"id": book_id}, {"$set": {"characters": chars}})
+    return {"char_id": char_id, "immagine": image}
+
+
 
 
 @api_router.get("/books/{book_id}/export")

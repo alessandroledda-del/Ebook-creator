@@ -202,9 +202,10 @@ Regole:
     return data
 
 
-async def generate_chapter(book: dict, index: int) -> str:
+async def generate_chapter(book: dict, index: int, instruction: str = "") -> str:
     """Generate the full narrative content for a single chapter, keeping
-    continuity with the outline and the previous chapter."""
+    continuity with the outline and the previous chapter. An optional
+    instruction can steer a rewrite (e.g. make it longer, change tone)."""
     model = book.get("model", "claude-sonnet-4-5-20250929")
     model = model if model in TEXT_MODELS else "claude-sonnet-4-5-20250929"
     provider = _provider_for(model)
@@ -231,6 +232,18 @@ async def generate_chapter(book: dict, index: int) -> str:
     chars = book.get("characters", [])
     chars_txt = _characters_block(chars)
 
+    existing_txt = ""
+    if instruction and current.get("contenuto"):
+        existing_txt = (
+            f"\nVERSIONE ATTUALE DEL CAPITOLO (da riscrivere secondo l'istruzione):\n"
+            f"{current.get('contenuto')[:2500]}\n"
+        )
+    instruction_txt = ""
+    if instruction:
+        instruction_txt = (
+            f"\nISTRUZIONE DI RISCRITTURA (priorità assoluta): {instruction}\n"
+        )
+
     system_message = (
         "Sei un pluripremiato romanziere italiano. Scrivi prosa coinvolgente, "
         "vivida e curata, esclusivamente in italiano. Restituisci solo il testo "
@@ -245,19 +258,61 @@ PERSONAGGI:
 
 STRUTTURA DEI CAPITOLI:
 {outline_txt}
-{prev_txt}
+{prev_txt}{existing_txt}{instruction_txt}
 Scrivi ORA il contenuto completo del capitolo {index + 1} dal titolo "{current.get('titolo', '')}"
 (traccia: {current.get('sommario', '')}).
-Lunghezza: 500-800 parole. Prosa narrativa in italiano, coerente con i capitoli vicini.
+Lunghezza: 500-800 parole (salvo diversa indicazione nell'istruzione). Prosa narrativa in italiano, coerente con i capitoli vicini.
 Non scrivere il titolo del capitolo, solo il testo."""
 
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
-        session_id=f"chapter-{book.get('id', uuid.uuid4().hex)}-{index}",
+        session_id=f"chapter-{book.get('id', uuid.uuid4().hex)}-{index}-{uuid.uuid4().hex[:6]}",
         system_message=system_message,
-    ).with_model(provider, model).with_params(max_tokens=4000)
+    ).with_model(provider, model).with_params(max_tokens=5000)
 
     return await chat.send_message(UserMessage(text=prompt))
+
+
+async def generate_portrait(character: dict, model: str = "gemini-nano-banana") -> str:
+    """Generate a character portrait. Returns a base64 data URI (PNG/JPEG)."""
+    nome = character.get("nome", "Personaggio")
+    ruolo = character.get("ruolo", "")
+    descr = character.get("descrizione", "")
+    forza = character.get("punti_forza", "")
+    prompt = (
+        f"Detailed character portrait of a fictional book character named {nome}. "
+        f"Role: {ruolo}. Appearance and personality: {descr}. Notable traits: {forza}. "
+        "Painterly illustrated portrait, head and shoulders, atmospheric lighting, "
+        "rich literary book-illustration style, single character, neutral evocative background. "
+        "Do NOT render any text or letters."
+    )
+    image_model = "gpt-image-1" if model == "gpt-image-1" else "gemini-nano-banana"
+
+    if image_model == "gpt-image-1":
+        gen = OpenAIImageGeneration(api_key=EMERGENT_LLM_KEY)
+        images = await gen.generate_images(
+            prompt=prompt, model="gpt-image-1", number_of_images=1, quality="medium"
+        )
+        if not images:
+            raise ValueError("Nessuna immagine generata (GPT Image 1)")
+        b64 = base64.b64encode(images[0]).decode("utf-8")
+        return f"data:image/png;base64,{b64}"
+
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"portrait-{uuid.uuid4().hex}",
+        system_message="You are a professional character illustrator.",
+    ).with_model("gemini", IMAGE_MODELS["gemini-nano-banana"]).with_params(
+        modalities=["image", "text"]
+    )
+    _text, images = await chat.send_message_multimodal_response(
+        UserMessage(text=prompt)
+    )
+    if not images:
+        raise ValueError("Nessuna immagine generata (Nano Banana)")
+    img = images[0]
+    return f"data:{img.get('mime_type', 'image/png')};base64,{img['data']}"
+
 
 
 
