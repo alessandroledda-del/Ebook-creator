@@ -208,7 +208,7 @@ export default function CreateBook() {
             ) : (
               <div className="space-y-px bg-[#E7E5E4] border border-[#E7E5E4] rounded-sm overflow-hidden">
                 {characters.map((c, i) => (
-                  <div key={i} className="bg-white p-4 flex items-start justify-between" data-testid="character-row">
+                  <div key={`${i}-${c.nome}`} className="bg-white p-4 flex items-start justify-between" data-testid="character-row">
                     <div>
                       <p className="font-serif text-lg text-[#1C1917]">
                         {c.nome} {c.ruolo && <span className="text-sm text-[#57534E] font-sans">— {c.ruolo}</span>}

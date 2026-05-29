@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -78,7 +78,7 @@ export default function BookView() {
   const [portraitModel, setPortraitModel] = useState("gemini-nano-banana");
   const [portraitLoading, setPortraitLoading] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await api.get(`/books/${id}`);
       setBook(res.data);
@@ -88,12 +88,11 @@ export default function BookView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [load]);
 
   const saveCharacter = async (char) => {
     try {
@@ -255,6 +254,11 @@ export default function BookView() {
     }
   };
 
+  const activeParagraphs = useMemo(() => {
+    const text = book?.capitoli?.[activeChapter]?.contenuto || "";
+    return text.split(/\n+/).filter(Boolean);
+  }, [book, activeChapter]);
+
   if (loading || !book) {
     return (
       <div className="min-h-screen bg-[#FDFBF7]">
@@ -343,7 +347,7 @@ export default function BookView() {
                   <nav className="space-y-1">
                     {chapters.map((ch, i) => (
                       <button
-                        key={i}
+                        key={`${i}-${ch.titolo}`}
                         onClick={() => setActiveChapter(i)}
                         data-testid={`chapter-nav-${i}`}
                         className={`block w-full text-left px-3 py-2 rounded-sm text-sm transition-colors ${
@@ -372,12 +376,9 @@ export default function BookView() {
                     {chapters[activeChapter].titolo}
                   </h2>
                   <div className="book-content text-lg text-[#292524] leading-relaxed" data-testid="chapter-content">
-                    {chapters[activeChapter].contenuto
-                      .split(/\n+/)
-                      .filter(Boolean)
-                      .map((p, idx) => (
-                        <p key={idx}>{p}</p>
-                      ))}
+                    {activeParagraphs.map((p, idx) => (
+                      <p key={idx}>{p}</p>
+                    ))}
                   </div>
 
                   <div className="mt-12 pt-6 border-t border-[#E7E5E4]" data-testid="regenerate-toolbar">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [toDelete, setToDelete] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await api.get("/books");
       setBooks(res.data);
@@ -34,11 +34,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const handleDelete = async () => {
     const id = toDelete;

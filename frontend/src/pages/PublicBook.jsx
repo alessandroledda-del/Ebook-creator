@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Feather, Shield, Zap, HeartCrack, BookOpen } from "lucide-react";
@@ -22,6 +22,11 @@ export default function PublicBook() {
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [publicId]);
+
+  const activeParagraphs = useMemo(() => {
+    const text = book?.capitoli?.[activeChapter]?.contenuto || "";
+    return text.split(/\n+/).filter(Boolean);
+  }, [book, activeChapter]);
 
   if (loading) {
     return (
@@ -101,7 +106,7 @@ export default function PublicBook() {
                   <nav className="space-y-1">
                     {chapters.map((ch, i) => (
                       <button
-                        key={i}
+                        key={`${i}-${ch.titolo}`}
                         onClick={() => setActiveChapter(i)}
                         className={`block w-full text-left px-3 py-2 rounded-sm text-sm transition-colors ${
                           activeChapter === i ? "bg-[#722F37] text-white" : "text-[#57534E] hover:bg-[#F5F3EC]"
@@ -127,12 +132,9 @@ export default function PublicBook() {
                     {chapters[activeChapter].titolo}
                   </h2>
                   <div className="book-content text-lg text-[#292524] leading-relaxed">
-                    {(chapters[activeChapter].contenuto || "")
-                      .split(/\n+/)
-                      .filter(Boolean)
-                      .map((p, idx) => (
-                        <p key={idx}>{p}</p>
-                      ))}
+                    {activeParagraphs.map((p, idx) => (
+                      <p key={idx}>{p}</p>
+                    ))}
                   </div>
                 </motion.article>
               </div>
