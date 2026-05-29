@@ -1,0 +1,115 @@
+{
+  "theme": "Editorial Luxury (Light Mode)",
+  "archetype": "Archetype 5 (Luxury) mixed with Archetype 1 (Organic & Earthy)",
+  "vibe": "Premium publishing house, classic literature meets modern SaaS. Minimalist, tactile, and highly legible.",
+  "colors": {
+    "background": {
+      "primary": "#FDFBF7",
+      "description": "Pale Ivory / Paper texture feel. Use for body background."
+    },
+    "surface": {
+      "primary": "#FFFFFF",
+      "secondary": "#F5F3EC",
+      "description": "Pure white for cards, slightly darker ivory for secondary panels."
+    },
+    "text": {
+      "primary": "#1C1917",
+      "secondary": "#57534E",
+      "accent": "#722F37",
+      "description": "Deep stone for headings, lighter stone for body. Avoid pure black. Wine Red for strong emphasis."
+    },
+    "accent": {
+      "primary": "#722F37",
+      "hover": "#5C252C",
+      "description": "Deep Wine Red / Burgundy. Reminiscent of classic leather book bindings and ink."
+    },
+    "border": {
+      "default": "#E7E5E4",
+      "focus": "#722F37"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Playfair Display",
+      "body": "Manrope",
+      "mono": "JetBrains Mono"
+    },
+    "rules": {
+      "h1": "text-5xl lg:text-6xl font-serif tracking-tight text-[#1C1917]",
+      "h2": "text-3xl lg:text-4xl font-serif tracking-tight text-[#1C1917]",
+      "h3": "text-xl lg:text-2xl font-serif tracking-tight",
+      "body": "text-base font-sans text-[#57534E] leading-relaxed",
+      "overline": "text-xs font-sans uppercase tracking-[0.2em] text-[#722F37] font-semibold",
+      "custom_instruction": "NEVER use Inter, Roboto, or generic fonts for headings. Mix Playfair Display italics for emotional words inside headings (e.g., 'Crea il tuo <span class=\"italic\">capolavoro</span>')."
+    }
+  },
+  "layout_and_spacing": {
+    "general": "Generous spacing. Use p-8 to p-12 for containers. Let the text breathe like a printed book page.",
+    "bento_grid": "For the Character Manager and Dashboard, use a 'Control Room' grid but with editorial aesthetics: sharp 1px borders, white backgrounds on ivory canvas.",
+    "borders": "Expose the skeleton. Use border-collapse styles or right/bottom borders to separate items instead of heavy floating cards.",
+    "alignment": "Left-align dense text and forms. Center-align hero titles."
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-6 py-3 font-sans font-medium transition-all duration-300",
+      "secondary": "bg-transparent border border-[#E7E5E4] text-[#1C1917] hover:border-[#1C1917] rounded-sm px-6 py-3 font-sans transition-all duration-300"
+    },
+    "inputs": {
+      "style": "bg-transparent border-0 border-b-2 border-[#E7E5E4] rounded-none focus:ring-0 focus:border-[#722F37] px-0 py-2 text-lg",
+      "description": "Forms should feel like filling out lines in a notebook. Avoid full boxed inputs for the 'Idea' section."
+    },
+    "cards": {
+      "style": "bg-white border border-[#E7E5E4] rounded-sm shadow-sm hover:shadow-md transition-shadow",
+      "book_cover": "For generated books, show the cover image with a slight drop-shadow (shadow-xl) against a solid background to mimic a real book standing up."
+    },
+    "header": {
+      "style": "sticky top-0 z-50 bg-[#FDFBF7]/90 backdrop-blur-xl border-b border-[#E7E5E4]"
+    }
+  },
+  "motion": {
+    "hover": "Subtle and organic. 200ms ease for color shifts. Use slight -translate-y-1 for book covers on hover.",
+    "page_transitions": "Fade in with a slight upward drift (framer-motion).",
+    "reading_view": "Smooth scrolling (Lenis) is mandatory for the reading experience."
+  },
+  "icons": {
+    "library": "lucide-react",
+    "stroke_width": "1.5",
+    "style": "Clean, minimal, high legibility."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/ee7f107e-edbd-4e3f-a701-bf5c98274a64/images/0852456c4fd73e2d2296cb0906e3ea84037a92975fc2ce5ab896f1acfaeb379b.png",
+        "category": "hero_background",
+        "description": "Abstract minimalist ink spill. Use as an accent graphic in the hero section (e.g., positioned to the right of the text or as a faded background element with mix-blend-multiply)."
+      },
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/ee7f107e-edbd-4e3f-a701-bf5c98274a64/images/6ec350b1571739a569665c05cf3aed18ea87a18bf664dd34746eca7611f67457.png",
+        "category": "character_placeholder",
+        "description": "Elegant botanical silhouette. Use as the default avatar for characters in the Character Manager before an AI generates their specific look."
+      },
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/ee7f107e-edbd-4e3f-a701-bf5c98274a64/images/fab09ff9c59861f74d2a04fdbfd3c4ec25a7bd7a732d106285a978b550f21c7a.png",
+        "category": "book_mockup",
+        "description": "Floating blank book mockup. Use in the Book Library/Dashboard as placeholders or composite generated covers over this."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1695041712957-45634f4fa759?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwzfHx2aW50YWdlJTIwYm9vayUyMHBhZ2VzJTIwdGV4dHVyZXxlbnwwfHx8fDE3ODAwNjIzNDN8MA&ixlib=rb-4.1.0&q=85",
+        "category": "texture_overlay",
+        "description": "Vintage paper texture. Can be used with opacity-10 and mix-blend-multiply over solid color blocks to give a tactile feel."
+      }
+    ]
+  },
+  "testing": {
+    "rules": "All interactive elements MUST have data-testid attributes (e.g., data-testid='generate-book-btn', data-testid='character-name-input'). Use kebab-case."
+  },
+  "instructions_to_main_agent": [
+    "The entire app UI MUST be in Italian, as requested.",
+    "Implement the 'Idea Input' as a multi-step, distraction-free wizard, not a dense form. It should feel like a premium writing experience.",
+    "For the 'Character Manager', use a Bento Grid layout to display strengths, weaknesses, and traits prominently, resembling a dossier or character sheet.",
+    "For the 'Book Reader', prioritize extreme legibility: max-w-prose (max-w-[65ch]), large serif typography for chapter titles, and generous line-height for body text.",
+    "Do NOT use generic Shadcn forms out of the box. Strip the borders and styles to match the 'lines in a notebook' inputs specified in the design guidelines.",
+    "Install 'lucide-react' for icons. You can also use 'framer-motion' for page transitions.",
+    "Do not use dark mode. Stick strictly to the Light Editorial theme with Ivory/Wine Red colors to maintain the classic publishing aesthetic."
+  ]
+}
