@@ -26,3 +26,4 @@ jq>=1.6.0
 typer>=0.9.0
 emergentintegrations==0.1.2
 httpx
+reportlab==4.5.1

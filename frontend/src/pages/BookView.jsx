@@ -13,6 +13,7 @@ import {
   Shield,
   Zap,
   HeartCrack,
+  Download,
 } from "lucide-react";
 import Header from "@/components/Header";
 import CharacterDialog from "@/components/CharacterDialog";
@@ -46,6 +47,7 @@ export default function BookView() {
   const [coverModel, setCoverModel] = useState("gemini-nano-banana");
   const [coverStyle, setCoverStyle] = useState("elegante e cinematografico");
   const [coverLoading, setCoverLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const load = async () => {
     try {
@@ -85,6 +87,25 @@ export default function BookView() {
       load();
     } catch {
       toast.error("Eliminazione non riuscita");
+    }
+  };
+
+  const downloadPdf = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.get(`/books/${id}/export`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(book.titolo || "libro").replace(/\s+/g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Download non riuscito");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -145,6 +166,17 @@ export default function BookView() {
               <p className="font-serif italic text-xl text-[#57534E] mt-2">{book.sottotitolo}</p>
             )}
             <p className="text-base text-[#57534E] leading-relaxed mt-4 max-w-2xl">{book.sinossi}</p>
+            {book.status === "completato" && (
+              <button
+                onClick={downloadPdf}
+                disabled={downloading}
+                data-testid="download-pdf-btn"
+                className="mt-6 inline-flex items-center gap-2 border border-[#722F37] text-[#722F37] hover:bg-[#722F37] hover:text-white rounded-sm px-5 py-2.5 text-sm font-medium transition-colors duration-300 disabled:opacity-60"
+              >
+                <Download className="w-4 h-4" strokeWidth={1.5} />
+                {downloading ? "Preparazione…" : "Scarica PDF"}
+              </button>
+            )}
           </div>
         </div>
 

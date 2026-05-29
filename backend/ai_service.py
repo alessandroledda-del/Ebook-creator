@@ -145,6 +145,122 @@ Regole:
     return data
 
 
+async def generate_outline(idea: str, genere: str, model: str, num_capitoli: int,
+                           characters: list) -> dict:
+    """Generate only the book skeleton: title, synopsis, characters and a
+    chapter outline (titles + short summaries). Fast, enables progress UI."""
+    model = model if model in TEXT_MODELS else "claude-sonnet-4-5-20250929"
+    provider = _provider_for(model)
+    num_capitoli = max(3, min(int(num_capitoli or 5), 10))
+
+    system_message = (
+        "Sei un pluripremiato romanziere italiano. Pianifichi libri con cura. "
+        "Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza markdown."
+    )
+    prompt = f"""Progetta la struttura di un libro a partire da questa idea.
+
+IDEA: {idea}
+GENERE PREFERITO: {genere or "a tua scelta, coerente con l'idea"}
+NUMERO DI CAPITOLI: {num_capitoli}
+
+PERSONAGGI FORNITI DALL'UTENTE (da integrare e arricchire):
+{_characters_block(characters)}
+
+Restituisci un JSON con ESATTAMENTE questa struttura:
+{{
+  "titolo": "Titolo evocativo",
+  "sottotitolo": "Sottotitolo (può essere vuoto)",
+  "genere": "Genere letterario",
+  "sinossi": "Sinossi avvincente di 4-6 frasi",
+  "personaggi": [
+    {{"nome": "", "ruolo": "", "descrizione": "", "abilita": "", "punti_forza": "", "punti_debolezza": ""}}
+  ],
+  "capitoli": [
+    {{"titolo": "Titolo del capitolo", "sommario": "1-2 frasi su cosa accade nel capitolo"}}
+  ]
+}}
+
+Regole:
+- Esattamente {num_capitoli} capitoli con arco narrativo coerente (inizio, sviluppo, climax, finale).
+- Integra i personaggi forniti e aggiungine altri se utile.
+- Scrivi tutto in italiano. NON scrivere il contenuto completo dei capitoli, solo i sommari."""
+
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"outline-{uuid.uuid4().hex}",
+        system_message=system_message,
+    ).with_model(provider, model).with_params(max_tokens=3000)
+
+    response = await chat.send_message(UserMessage(text=prompt))
+    data = _extract_json(response)
+    data.setdefault("titolo", "Senza titolo")
+    data.setdefault("sottotitolo", "")
+    data.setdefault("genere", genere or "Narrativa")
+    data.setdefault("sinossi", "")
+    data.setdefault("personaggi", [])
+    data.setdefault("capitoli", [])
+    return data
+
+
+async def generate_chapter(book: dict, index: int) -> str:
+    """Generate the full narrative content for a single chapter, keeping
+    continuity with the outline and the previous chapter."""
+    model = book.get("model", "claude-sonnet-4-5-20250929")
+    model = model if model in TEXT_MODELS else "claude-sonnet-4-5-20250929"
+    provider = _provider_for(model)
+
+    capitoli = book.get("capitoli", [])
+    if index < 0 or index >= len(capitoli):
+        raise ValueError("Indice capitolo non valido")
+    current = capitoli[index]
+
+    outline_lines = []
+    for i, c in enumerate(capitoli):
+        marker = " <-- DA SCRIVERE ORA" if i == index else ""
+        outline_lines.append(
+            f"{i + 1}. {c.get('titolo', '')} — {c.get('sommario', '')}{marker}"
+        )
+    outline_txt = "\n".join(outline_lines)
+
+    prev_txt = ""
+    if index > 0:
+        prev = capitoli[index - 1].get("contenuto", "")
+        if prev:
+            prev_txt = f"\nFINE DEL CAPITOLO PRECEDENTE (per continuità):\n...{prev[-800:]}\n"
+
+    chars = book.get("characters", [])
+    chars_txt = _characters_block(chars)
+
+    system_message = (
+        "Sei un pluripremiato romanziere italiano. Scrivi prosa coinvolgente, "
+        "vivida e curata, esclusivamente in italiano. Restituisci solo il testo "
+        "narrativo del capitolo, senza titoli, intestazioni o commenti."
+    )
+    prompt = f"""Stai scrivendo il libro "{book.get('titolo', '')}" ({book.get('genere', '')}).
+
+SINOSSI: {book.get('sinossi', '')}
+
+PERSONAGGI:
+{chars_txt}
+
+STRUTTURA DEI CAPITOLI:
+{outline_txt}
+{prev_txt}
+Scrivi ORA il contenuto completo del capitolo {index + 1} dal titolo "{current.get('titolo', '')}"
+(traccia: {current.get('sommario', '')}).
+Lunghezza: 500-800 parole. Prosa narrativa in italiano, coerente con i capitoli vicini.
+Non scrivere il titolo del capitolo, solo il testo."""
+
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"chapter-{book.get('id', uuid.uuid4().hex)}-{index}",
+        system_message=system_message,
+    ).with_model(provider, model).with_params(max_tokens=4000)
+
+    return await chat.send_message(UserMessage(text=prompt))
+
+
+
 def _cover_prompt(title: str, genere: str, sinossi: str, style: str) -> str:
     return (
         f"Professional book cover illustration for a novel titled '{title}'. "

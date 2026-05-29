@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 
 export default function CreateBook() {
   const navigate = useNavigate();
@@ -27,6 +28,7 @@ export default function CreateBook() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
 
   const addCharacter = (char) => {
     if (editIndex !== null) {
@@ -53,6 +55,7 @@ export default function CreateBook() {
     }
     setGenerating(true);
     try {
+      setProgress({ current: 0, total: 0, label: "Sto immaginando la trama e i personaggi…" });
       const create = await api.post("/books", {
         idea,
         genere,
@@ -61,7 +64,17 @@ export default function CreateBook() {
         characters,
       });
       const bookId = create.data.id;
-      await api.post(`/books/${bookId}/generate`);
+
+      const outline = await api.post(`/books/${bookId}/generate-outline`);
+      const chapters = outline.data.capitoli || [];
+      const total = chapters.length;
+
+      for (let i = 0; i < total; i++) {
+        setProgress({ current: i, total, label: `Scrivo il capitolo: "${chapters[i].titolo}"` });
+        await api.post(`/books/${bookId}/generate-chapter`, { index: i });
+      }
+
+      setProgress({ current: total, total, label: "Ultimi ritocchi…" });
       toast.success("Il tuo libro è pronto!");
       navigate(`/book/${bookId}`);
     } catch (e) {
@@ -78,12 +91,20 @@ export default function CreateBook() {
       <Header />
 
       {generating && (
-        <div className="fixed inset-0 z-[60] bg-[#FDFBF7]/95 backdrop-blur-sm flex flex-col items-center justify-center">
+        <div className="fixed inset-0 z-[60] bg-[#FDFBF7]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
           <Feather className="w-12 h-12 text-[#722F37] animate-pulse mb-6" strokeWidth={1.5} />
-          <h2 className="font-serif text-3xl text-[#1C1917] mb-2">Sto scrivendo il tuo libro…</h2>
-          <p className="text-sm text-[#57534E] max-w-sm text-center">
-            L'AI sta sviluppando la trama e i capitoli. Possono volerci alcuni istanti.
+          <h2 className="font-serif text-3xl text-[#1C1917] mb-3 text-center">Sto scrivendo il tuo libro…</h2>
+          <p className="text-sm text-[#57534E] max-w-sm text-center min-h-[2.5rem]" data-testid="progress-label">
+            {progress.label}
           </p>
+          {progress.total > 0 && (
+            <div className="w-72 mt-5" data-testid="generation-progress">
+              <Progress value={(progress.current / progress.total) * 100} className="h-1.5" />
+              <p className="text-xs text-[#57534E] mt-3 text-center font-mono">
+                Capitolo {Math.min(progress.current + (progress.current < progress.total ? 1 : 0), progress.total)} di {progress.total}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

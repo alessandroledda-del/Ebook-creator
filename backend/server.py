@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Response, Cookie
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -12,6 +13,85 @@ from datetime import datetime, timezone, timedelta
 import httpx
 
 import ai_service
+
+import io
+from reportlab.lib.pagesizes import A5
+from reportlab.lib.units import mm
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.colors import HexColor
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, PageBreak,
+)
+
+
+def build_book_pdf(doc: dict) -> bytes:
+    """Render a book document to a nicely typeset PDF (bytes)."""
+    buf = io.BytesIO()
+    pdf = SimpleDocTemplate(
+        buf, pagesize=A5,
+        leftMargin=20 * mm, rightMargin=20 * mm,
+        topMargin=22 * mm, bottomMargin=20 * mm,
+        title=doc.get("titolo", "Libro"),
+    )
+    base = getSampleStyleSheet()
+    wine = HexColor("#722F37")
+    ink = HexColor("#1C1917")
+
+    title_style = ParagraphStyle(
+        "BookTitle", parent=base["Title"], fontName="Times-Bold",
+        fontSize=30, leading=34, textColor=ink, alignment=TA_CENTER, spaceAfter=10,
+    )
+    subtitle_style = ParagraphStyle(
+        "BookSub", parent=base["Normal"], fontName="Times-Italic",
+        fontSize=14, leading=18, textColor=wine, alignment=TA_CENTER, spaceAfter=24,
+    )
+    overline = ParagraphStyle(
+        "Overline", parent=base["Normal"], fontName="Helvetica-Bold",
+        fontSize=9, textColor=wine, alignment=TA_CENTER, spaceAfter=8,
+    )
+    synopsis_style = ParagraphStyle(
+        "Synopsis", parent=base["Normal"], fontName="Times-Italic",
+        fontSize=11, leading=17, textColor=ink, alignment=TA_CENTER,
+    )
+    chapter_over = ParagraphStyle(
+        "ChapOver", parent=base["Normal"], fontName="Helvetica-Bold",
+        fontSize=9, textColor=wine, spaceAfter=4,
+    )
+    chapter_title = ParagraphStyle(
+        "ChapTitle", parent=base["Heading1"], fontName="Times-Bold",
+        fontSize=20, leading=24, textColor=ink, spaceAfter=18,
+    )
+    body_style = ParagraphStyle(
+        "Body", parent=base["Normal"], fontName="Times-Roman",
+        fontSize=11.5, leading=18, textColor=ink, alignment=TA_JUSTIFY, spaceAfter=10,
+    )
+
+    story = []
+    story.append(Spacer(1, 50 * mm))
+    story.append(Paragraph((doc.get("genere") or "Narrativa").upper(), overline))
+    story.append(Paragraph(doc.get("titolo", "Senza titolo"), title_style))
+    if doc.get("sottotitolo"):
+        story.append(Paragraph(doc["sottotitolo"], subtitle_style))
+    if doc.get("sinossi"):
+        story.append(Spacer(1, 8 * mm))
+        story.append(Paragraph(doc["sinossi"], synopsis_style))
+    story.append(PageBreak())
+
+    for i, ch in enumerate(doc.get("capitoli", [])):
+        story.append(Paragraph(f"CAPITOLO {i + 1}", chapter_over))
+        story.append(Paragraph(ch.get("titolo", ""), chapter_title))
+        for para in (ch.get("contenuto", "") or "").split("\n"):
+            para = para.strip()
+            if para:
+                story.append(Paragraph(para, body_style))
+        story.append(PageBreak())
+
+    pdf.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -284,6 +364,105 @@ async def generate_book_content(book_id: str, user: User = Depends(get_current_u
     await db.books.update_one({"id": book_id}, {"$set": update})
     doc.update(update)
     return doc
+
+
+class ChapterRequest(BaseModel):
+    index: int
+
+
+@api_router.post("/books/{book_id}/generate-outline")
+async def generate_outline_ep(book_id: str, user: User = Depends(get_current_user)):
+    doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    try:
+        result = await ai_service.generate_outline(
+            idea=doc["idea"],
+            genere=doc.get("genere", ""),
+            model=doc.get("model", "claude-sonnet-4-5-20250929"),
+            num_capitoli=doc.get("num_capitoli_richiesti", 5),
+            characters=doc.get("characters", []),
+        )
+    except Exception as e:
+        logger.error(f"Generazione outline fallita: {e}")
+        raise HTTPException(status_code=500, detail=f"Generazione fallita: {str(e)}")
+
+    merged_chars = []
+    for c in result.get("personaggi", []):
+        merged_chars.append({
+            "id": f"char_{uuid.uuid4().hex[:10]}",
+            "nome": c.get("nome", "Senza nome"),
+            "ruolo": c.get("ruolo", ""),
+            "descrizione": c.get("descrizione", ""),
+            "abilita": c.get("abilita", ""),
+            "punti_forza": c.get("punti_forza", ""),
+            "punti_debolezza": c.get("punti_debolezza", ""),
+        })
+
+    capitoli = [
+        {"titolo": c.get("titolo", f"Capitolo {i + 1}"),
+         "sommario": c.get("sommario", ""), "contenuto": ""}
+        for i, c in enumerate(result.get("capitoli", []))
+    ]
+
+    update = {
+        "titolo": result.get("titolo", ""),
+        "sottotitolo": result.get("sottotitolo", ""),
+        "genere": result.get("genere", doc.get("genere", "")),
+        "sinossi": result.get("sinossi", ""),
+        "capitoli": capitoli,
+        "characters": merged_chars if merged_chars else doc.get("characters", []),
+        "status": "in_scrittura",
+    }
+    await db.books.update_one({"id": book_id}, {"$set": update})
+    doc.update(update)
+    return doc
+
+
+@api_router.post("/books/{book_id}/generate-chapter")
+async def generate_chapter_ep(
+    book_id: str, payload: ChapterRequest, user: User = Depends(get_current_user)
+):
+    doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    capitoli = doc.get("capitoli", [])
+    if payload.index < 0 or payload.index >= len(capitoli):
+        raise HTTPException(status_code=400, detail="Indice capitolo non valido")
+    try:
+        contenuto = await ai_service.generate_chapter(doc, payload.index)
+    except Exception as e:
+        logger.error(f"Generazione capitolo fallita: {e}")
+        raise HTTPException(status_code=500, detail=f"Generazione fallita: {str(e)}")
+
+    capitoli[payload.index]["contenuto"] = contenuto
+    done = all(c.get("contenuto") for c in capitoli)
+    status = "completato" if done else "in_scrittura"
+    await db.books.update_one(
+        {"id": book_id}, {"$set": {"capitoli": capitoli, "status": status}}
+    )
+    return {
+        "index": payload.index,
+        "titolo": capitoli[payload.index]["titolo"],
+        "contenuto": contenuto,
+        "done": done,
+        "status": status,
+    }
+
+
+@api_router.get("/books/{book_id}/export")
+async def export_book_pdf(book_id: str, user: User = Depends(get_current_user)):
+    doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    pdf_bytes = build_book_pdf(doc)
+    filename = (doc.get("titolo") or "libro").replace(" ", "_")[:40]
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'},
+    )
+
 
 
 @api_router.post("/books/{book_id}/cover")
