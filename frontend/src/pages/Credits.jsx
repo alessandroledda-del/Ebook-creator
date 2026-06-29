@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Coins, Check, Sparkles, ArrowLeft, Loader2 } from "lucide-react";
+import { Coins, ArrowLeft, Loader2 } from "lucide-react";
 import Header from "@/components/Header";
+import { PackageCard } from "@/components/credits/PackageCard";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -63,7 +63,6 @@ export default function Credits() {
       setVerifying(true);
       pollStatus(sessionId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const buy = async (packageId) => {
@@ -120,52 +119,14 @@ export default function Credits() {
 
         <div className="grid md:grid-cols-3 gap-8" data-testid="packages-grid">
           {packages.map((pkg, i) => (
-            <motion.div
+            <PackageCard
               key={pkg.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: i * 0.08 }}
-              className={`relative bg-white border rounded-sm p-8 flex flex-col ${
-                pkg.id === "plus" ? "border-[#722F37] shadow-md" : "border-[#E7E5E4]"
-              }`}
-              data-testid={`package-${pkg.id}`}
-            >
-              {pkg.id === "plus" && (
-                <span className="absolute -top-3 left-8 bg-[#722F37] text-white text-[10px] uppercase tracking-wider px-3 py-1 rounded-sm">
-                  {PACKAGE_TAG[pkg.id]}
-                </span>
-              )}
-              <p className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">{pkg.name}</p>
-              <div className="flex items-end gap-2 mt-4">
-                <span className="font-serif text-5xl text-[#1C1917]">{pkg.credits}</span>
-                <span className="text-[#57534E] mb-2">crediti</span>
-              </div>
-              <p className="font-serif text-2xl text-[#1C1917] mt-4">€{pkg.amount.toFixed(2)}</p>
-              <p className="text-sm text-[#57534E] mt-1">
-                ~{Math.floor(pkg.credits / 8)} libri completi
-              </p>
-              <ul className="space-y-2 mt-6 mb-8 text-sm text-[#57534E] flex-1">
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#722F37]" strokeWidth={2} /> Generazione testo illimitata</li>
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#722F37]" strokeWidth={2} /> Copertine e ritratti AI</li>
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#722F37]" strokeWidth={2} /> Export PDF e condivisione</li>
-              </ul>
-              <button
-                onClick={() => buy(pkg.id)}
-                disabled={buying === pkg.id}
-                data-testid={`buy-${pkg.id}-btn`}
-                className={`flex items-center justify-center gap-2 rounded-sm px-6 py-3 font-medium transition-all duration-300 disabled:opacity-60 ${
-                  pkg.id === "plus"
-                    ? "bg-[#722F37] text-white hover:bg-[#5C252C]"
-                    : "border border-[#722F37] text-[#722F37] hover:bg-[#722F37] hover:text-white"
-                }`}
-              >
-                {buying === pkg.id ? (
-                  <><Sparkles className="w-4 h-4 animate-pulse" strokeWidth={1.5} /> Avvio…</>
-                ) : (
-                  <>Acquista</>
-                )}
-              </button>
-            </motion.div>
+              pkg={pkg}
+              index={i}
+              tag={PACKAGE_TAG[pkg.id]}
+              loading={buying === pkg.id}
+              onBuy={() => buy(pkg.id)}
+            />
           ))}
         </div>
       </main>
