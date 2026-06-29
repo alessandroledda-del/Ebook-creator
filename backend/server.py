@@ -1,9 +1,11 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Response, Cookie
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import html
+import base64
 import logging
 import uuid
 from pathlib import Path
@@ -682,6 +684,86 @@ async def public_book(public_id: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Libro non trovato o non pubblico")
     return doc
+
+
+OG_FALLBACK_IMAGE = "https://static.prod-images.emergentagent.com/jobs/ee7f107e-edbd-4e3f-a701-bf5c98274a64/images/fab09ff9c59861f74d2a04fdbfd3c4ec25a7bd7a732d106285a978b550f21c7a.png"
+
+
+@api_router.get("/public/books/{public_id}/cover")
+async def public_book_cover(public_id: str):
+    """Serve the cover as a real image (Open Graph requires a fetchable URL)."""
+    doc = await db.books.find_one(
+        {"public_id": public_id, "is_public": True}, {"_id": 0, "cover_image": 1}
+    )
+    cover = doc.get("cover_image") if doc else None
+    if not cover:
+        return RedirectResponse(OG_FALLBACK_IMAGE)
+    if "," in cover:
+        header, b64 = cover.split(",", 1)
+        mime = header.split(":", 1)[1].split(";", 1)[0] if ":" in header else "image/png"
+    else:
+        b64, mime = cover, "image/png"
+    try:
+        raw = base64.b64decode(b64)
+    except Exception:
+        return RedirectResponse(OG_FALLBACK_IMAGE)
+    return Response(content=raw, media_type=mime, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@api_router.get("/share/{public_id}", response_class=HTMLResponse)
+async def share_page(public_id: str, request: Request):
+    """HTML page with Open Graph / Twitter meta tags for social crawlers.
+    Human visitors are redirected to the in-app reader."""
+    xf_host = request.headers.get("x-forwarded-host")
+    host = xf_host or request.headers.get("host", "")
+    proto = request.headers.get("x-forwarded-proto", "https")
+    base = f"{proto}://{host}" if host else str(request.base_url).rstrip("/")
+    reader_path = f"/p/{public_id}"          # relative: always resolves to public origin
+    reader_url = f"{base}{reader_path}"       # absolute: for og:url
+
+    doc = await db.books.find_one(
+        {"public_id": public_id, "is_public": True},
+        {"_id": 0, "titolo": 1, "sinossi": 1, "genere": 1, "cover_image": 1},
+    )
+    if not doc:
+        return HTMLResponse(
+            "<!doctype html><html><head><meta http-equiv='refresh' content='0; url=/'>"
+            "<script>location.replace('/')</script></head><body></body></html>"
+        )
+
+    title = html.escape(doc.get("titolo") or "Un libro su Libroteca")
+    desc = html.escape((doc.get("sinossi") or "Creato con Libroteca, la casa editrice AI.")[:200])
+    image = f"{base}/api/public/books/{public_id}/cover" if doc.get("cover_image") else OG_FALLBACK_IMAGE
+
+    page = f"""<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{title} · Libroteca</title>
+<meta name="description" content="{desc}" />
+<meta property="og:type" content="book" />
+<meta property="og:site_name" content="Libroteca" />
+<meta property="og:title" content="{title}" />
+<meta property="og:description" content="{desc}" />
+<meta property="og:image" content="{image}" />
+<meta property="og:image:width" content="1024" />
+<meta property="og:image:height" content="1024" />
+<meta property="og:url" content="{reader_url}" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{title}" />
+<meta name="twitter:description" content="{desc}" />
+<meta name="twitter:image" content="{image}" />
+<meta http-equiv="refresh" content="0; url={reader_path}" />
+<script>window.location.replace("{reader_path}");</script>
+</head>
+<body style="font-family:system-ui;background:#FDFBF7;color:#1C1917;text-align:center;padding:80px 20px;">
+<p>Reindirizzamento al libro <strong>{title}</strong>…</p>
+<p><a href="{reader_path}" style="color:#722F37;">Apri il libro</a></p>
+</body>
+</html>"""
+    return HTMLResponse(page)
+
 
 
 # ---------------------- Stripe payments ----------------------

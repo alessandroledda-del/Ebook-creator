@@ -215,7 +215,7 @@ export default function BookView() {
     }
   };
 
-  const shareUrl = book?.public_id ? `${window.location.origin}/p/${book.public_id}` : "";
+  const shareUrl = book?.public_id ? `${window.location.origin}/api/share/${book.public_id}` : "";
 
   const copyShareUrl = async () => {
     try {
