@@ -1,49 +1,17 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { toast } from "sonner";
-import {
-  ArrowLeft,
-  Feather,
-  UserPlus,
-  Trash2,
-  Pencil,
-  ImagePlus,
-  Sparkles,
-  Shield,
-  Zap,
-  HeartCrack,
-  Download,
-  RotateCcw,
-  Share2,
-  Copy,
-  Check,
-  Upload,
-  X,
-} from "lucide-react";
+import { ArrowLeft, Feather } from "lucide-react";
 import Header from "@/components/Header";
 import CharacterDialog from "@/components/CharacterDialog";
+import { BookMeta } from "@/components/book/BookMeta";
+import { ChapterReader } from "@/components/book/ChapterReader";
+import { CharacterDossier } from "@/components/book/CharacterDossier";
+import { CoverStudio } from "@/components/book/CoverStudio";
+import { ShareDialog } from "@/components/book/ShareDialog";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-const BOOK_MOCKUP = "https://static.prod-images.emergentagent.com/jobs/ee7f107e-edbd-4e3f-a701-bf5c98274a64/images/fab09ff9c59861f74d2a04fdbfd3c4ec25a7bd7a732d106285a978b550f21c7a.png";
-const CHAR_PLACEHOLDER = "https://static.prod-images.emergentagent.com/jobs/ee7f107e-edbd-4e3f-a701-bf5c98274a64/images/6ec350b1571739a569665c05cf3aed18ea87a18bf664dd34746eca7611f67457.png";
 
 export default function BookView() {
   const { id } = useParams();
@@ -229,6 +197,11 @@ export default function BookView() {
     reader.readAsDataURL(file);
   };
 
+  const removeReference = () => {
+    setReferenceImage(null);
+    setReferenceName("");
+  };
+
   const toggleShare = async (makePublic) => {
     setSharing(true);
     try {
@@ -285,47 +258,12 @@ export default function BookView() {
           <ArrowLeft className="w-4 h-4" strokeWidth={1.5} /> Libreria
         </button>
 
-        <div className="flex flex-col lg:flex-row gap-8 mb-10">
-          <img
-            src={book.cover_image || BOOK_MOCKUP}
-            alt={book.titolo}
-            className="w-40 h-56 object-cover rounded-sm shadow-xl shrink-0"
-            data-testid="book-cover-image"
-          />
-          <div className="flex-1">
-            <p className="text-xs font-sans uppercase tracking-[0.2em] text-[#722F37] font-semibold mb-2">
-              {book.genere || "Narrativa"}
-            </p>
-            <h1 className="font-serif text-4xl lg:text-5xl tracking-tight text-[#1C1917]" data-testid="book-title">
-              {book.titolo || "Senza titolo"}
-            </h1>
-            {book.sottotitolo && (
-              <p className="font-serif italic text-xl text-[#57534E] mt-2">{book.sottotitolo}</p>
-            )}
-            <p className="text-base text-[#57534E] leading-relaxed mt-4 max-w-2xl">{book.sinossi}</p>
-            {book.status === "completato" && (
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <button
-                  onClick={downloadPdf}
-                  disabled={downloading}
-                  data-testid="download-pdf-btn"
-                  className="inline-flex items-center gap-2 border border-[#722F37] text-[#722F37] hover:bg-[#722F37] hover:text-white rounded-sm px-5 py-2.5 text-sm font-medium transition-colors duration-300 disabled:opacity-60"
-                >
-                  <Download className="w-4 h-4" strokeWidth={1.5} />
-                  {downloading ? "Preparazione…" : "Scarica PDF"}
-                </button>
-                <button
-                  onClick={() => setShareOpen(true)}
-                  data-testid="share-book-btn"
-                  className="inline-flex items-center gap-2 border border-[#E7E5E4] text-[#1C1917] hover:border-[#722F37] hover:text-[#722F37] rounded-sm px-5 py-2.5 text-sm font-medium transition-colors duration-300"
-                >
-                  <Share2 className="w-4 h-4" strokeWidth={1.5} />
-                  {book.is_public ? "Gestisci condivisione" : "Condividi"}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <BookMeta
+          book={book}
+          downloading={downloading}
+          onDownload={downloadPdf}
+          onShare={() => setShareOpen(true)}
+        />
 
         <Tabs defaultValue="lettura">
           <TabsList className="bg-[#F5F3EC] rounded-sm">
@@ -336,308 +274,52 @@ export default function BookView() {
             <TabsTrigger value="copertina" data-testid="tab-copertina">Copertina</TabsTrigger>
           </TabsList>
 
-          {/* LETTURA */}
           <TabsContent value="lettura" className="mt-8">
-            {chapters.length === 0 ? (
-              <p className="text-[#57534E]">Nessun capitolo disponibile.</p>
-            ) : (
-              <div className="grid lg:grid-cols-[260px_1fr] gap-10">
-                <aside className="lg:border-r lg:border-[#E7E5E4] lg:pr-6">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold mb-4">Indice</p>
-                  <nav className="space-y-1">
-                    {chapters.map((ch, i) => (
-                      <button
-                        key={`${i}-${ch.titolo}`}
-                        onClick={() => setActiveChapter(i)}
-                        data-testid={`chapter-nav-${i}`}
-                        className={`block w-full text-left px-3 py-2 rounded-sm text-sm transition-colors ${
-                          activeChapter === i
-                            ? "bg-[#722F37] text-white"
-                            : "text-[#57534E] hover:bg-[#F5F3EC]"
-                        }`}
-                      >
-                        <span className="font-mono text-xs mr-2">{String(i + 1).padStart(2, "0")}</span>
-                        {ch.titolo}
-                      </button>
-                    ))}
-                  </nav>
-                </aside>
-                <motion.article
-                  key={activeChapter}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4 }}
-                  className="max-w-[65ch]"
-                >
-                  <p className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold mb-3">
-                    Capitolo {activeChapter + 1}
-                  </p>
-                  <h2 className="font-serif text-3xl lg:text-4xl tracking-tight text-[#1C1917] mb-8">
-                    {chapters[activeChapter].titolo}
-                  </h2>
-                  <div className="book-content text-lg text-[#292524] leading-relaxed" data-testid="chapter-content">
-                    {activeParagraphs.map((p, idx) => (
-                      <p key={idx}>{p}</p>
-                    ))}
-                  </div>
-
-                  <div className="mt-12 pt-6 border-t border-[#E7E5E4]" data-testid="regenerate-toolbar">
-                    <p className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold mb-4">
-                      <RotateCcw className="w-3.5 h-3.5" strokeWidth={2} /> Rigenera questo capitolo
-                    </p>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {[
-                        ["Più lungo", "Riscrivi il capitolo rendendolo più lungo e dettagliato (circa 900-1100 parole)."],
-                        ["Più breve", "Riscrivi il capitolo in forma più concisa ed essenziale (circa 300-400 parole)."],
-                        ["Tono più cupo", "Riscrivi il capitolo con un tono più cupo, teso e drammatico."],
-                        ["Tono più leggero", "Riscrivi il capitolo con un tono più leggero, ironico e brillante."],
-                        ["Più dialoghi", "Riscrivi il capitolo dando maggiore spazio ai dialoghi tra i personaggi."],
-                      ].map(([label, instr]) => (
-                        <button
-                          key={label}
-                          onClick={() => regenerateChapter(instr)}
-                          disabled={regenerating}
-                          data-testid={`regen-preset-${label}`}
-                          className="text-sm border border-[#E7E5E4] text-[#1C1917] hover:border-[#722F37] hover:text-[#722F37] rounded-sm px-3 py-1.5 transition-colors disabled:opacity-50"
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <Input
-                        data-testid="regen-custom-input"
-                        value={customInstr}
-                        onChange={(e) => setCustomInstr(e.target.value)}
-                        placeholder="Istruzione personalizzata (es. ambienta la scena di notte)"
-                        className="bg-transparent border-0 border-b-2 border-[#E7E5E4] rounded-none focus-visible:ring-0 focus:border-[#722F37] px-0"
-                      />
-                      <button
-                        onClick={() => regenerateChapter(customInstr)}
-                        disabled={regenerating || !customInstr.trim()}
-                        data-testid="regen-custom-btn"
-                        className="shrink-0 flex items-center gap-2 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        {regenerating ? (
-                          <>
-                            <Sparkles className="w-4 h-4 animate-pulse" strokeWidth={1.5} /> Rigenerazione…
-                          </>
-                        ) : (
-                          <>
-                            <RotateCcw className="w-4 h-4" strokeWidth={1.5} /> Rigenera
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </motion.article>
-              </div>
-            )}
+            <ChapterReader
+              chapters={chapters}
+              activeChapter={activeChapter}
+              setActiveChapter={setActiveChapter}
+              paragraphs={activeParagraphs}
+              regenerating={regenerating}
+              customInstr={customInstr}
+              setCustomInstr={setCustomInstr}
+              onRegenerate={regenerateChapter}
+            />
           </TabsContent>
 
-          {/* PERSONAGGI */}
           <TabsContent value="personaggi" className="mt-8">
-            <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-              <h2 className="font-serif text-2xl text-[#1C1917]">Dossier dei personaggi</h2>
-              <div className="flex items-center gap-3">
-                <Select value={portraitModel} onValueChange={setPortraitModel}>
-                  <SelectTrigger data-testid="portrait-model-select" className="w-44 rounded-sm border-[#E7E5E4] text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gemini-nano-banana">Ritratti: Nano Banana</SelectItem>
-                    <SelectItem value="gpt-image-1">Ritratti: GPT Image 1</SelectItem>
-                  </SelectContent>
-                </Select>
-                <button
-                  onClick={() => {
-                    setEditChar(null);
-                    setDialogOpen(true);
-                  }}
-                  data-testid="add-character-btn"
-                  className="flex items-center gap-2 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-4 py-2 text-sm font-medium transition-colors"
-                >
-                  <UserPlus className="w-4 h-4" strokeWidth={1.5} /> Aggiungi
-                </button>
-              </div>
-            </div>
-
-            {characters.length === 0 ? (
-              <p className="text-[#57534E]">Nessun personaggio. Aggiungine uno.</p>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-6" data-testid="characters-grid">
-                {characters.map((c) => (
-                  <div
-                    key={c.id}
-                    className="bg-white border border-[#E7E5E4] rounded-sm p-6"
-                    data-testid="character-card"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="relative shrink-0">
-                        <img
-                          src={c.immagine || CHAR_PLACEHOLDER}
-                          alt={c.nome}
-                          className="w-16 h-16 rounded-sm object-cover bg-[#F5F3EC]"
-                          data-testid="character-portrait"
-                        />
-                        <button
-                          onClick={() => generatePortrait(c.id)}
-                          disabled={portraitLoading === c.id}
-                          data-testid="generate-portrait-btn"
-                          title={c.immagine ? "Rigenera ritratto" : "Genera ritratto"}
-                          className="absolute -bottom-2 -right-2 w-7 h-7 flex items-center justify-center bg-[#722F37] text-white rounded-full hover:bg-[#5C252C] transition-colors disabled:opacity-60"
-                        >
-                          {portraitLoading === c.id ? (
-                            <Sparkles className="w-3.5 h-3.5 animate-pulse" strokeWidth={1.5} />
-                          ) : (
-                            <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.5} />
-                          )}
-                        </button>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-serif text-2xl text-[#1C1917] leading-tight">{c.nome}</h3>
-                        {c.ruolo && <p className="text-xs uppercase tracking-wider text-[#722F37] font-semibold mt-1">{c.ruolo}</p>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            setEditChar(c);
-                            setDialogOpen(true);
-                          }}
-                          className="text-[#57534E] hover:text-[#722F37]"
-                          data-testid="edit-character-btn"
-                        >
-                          <Pencil className="w-4 h-4" strokeWidth={1.5} />
-                        </button>
-                        <button
-                          onClick={() => deleteCharacter(c.id)}
-                          className="text-[#57534E] hover:text-[#722F37]"
-                          data-testid="delete-character-btn"
-                        >
-                          <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-                        </button>
-                      </div>
-                    </div>
-                    {c.descrizione && <p className="text-sm text-[#57534E] leading-relaxed mt-4">{c.descrizione}</p>}
-                    <div className="grid grid-cols-1 gap-px bg-[#E7E5E4] border border-[#E7E5E4] rounded-sm mt-4 overflow-hidden">
-                      {c.abilita && (
-                        <div className="bg-white p-3">
-                          <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[#722F37] font-semibold mb-1">
-                            <Zap className="w-3 h-3" strokeWidth={2} /> Abilità
-                          </p>
-                          <p className="text-sm text-[#292524]">{c.abilita}</p>
-                        </div>
-                      )}
-                      {c.punti_forza && (
-                        <div className="bg-white p-3">
-                          <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[#722F37] font-semibold mb-1">
-                            <Shield className="w-3 h-3" strokeWidth={2} /> Punti di forza
-                          </p>
-                          <p className="text-sm text-[#292524]">{c.punti_forza}</p>
-                        </div>
-                      )}
-                      {c.punti_debolezza && (
-                        <div className="bg-white p-3">
-                          <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[#722F37] font-semibold mb-1">
-                            <HeartCrack className="w-3 h-3" strokeWidth={2} /> Punti di debolezza
-                          </p>
-                          <p className="text-sm text-[#292524]">{c.punti_debolezza}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <CharacterDossier
+              characters={characters}
+              portraitModel={portraitModel}
+              setPortraitModel={setPortraitModel}
+              portraitLoading={portraitLoading}
+              onAdd={() => {
+                setEditChar(null);
+                setDialogOpen(true);
+              }}
+              onEdit={(c) => {
+                setEditChar(c);
+                setDialogOpen(true);
+              }}
+              onDelete={deleteCharacter}
+              onPortrait={generatePortrait}
+            />
           </TabsContent>
 
-          {/* COPERTINA */}
           <TabsContent value="copertina" className="mt-8">
-            <div className="grid md:grid-cols-2 gap-10 items-start">
-              <div className="flex justify-center">
-                <img
-                  src={book.cover_image || BOOK_MOCKUP}
-                  alt="Copertina"
-                  className="w-64 h-[22rem] object-cover rounded-sm shadow-xl"
-                  data-testid="cover-preview"
-                />
-              </div>
-              <div>
-                <h2 className="font-serif text-2xl text-[#1C1917] mb-2">Genera la copertina</h2>
-                <p className="text-sm text-[#57534E] mb-8">
-                  Scegli il motore di generazione e lo stile visivo. La copertina viene creata
-                  dalla trama del libro.
-                </p>
-                <div className="space-y-8">
-                  <div>
-                    <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">Motore</Label>
-                    <Select value={coverModel} onValueChange={setCoverModel}>
-                      <SelectTrigger data-testid="cover-model-select" className="mt-2 rounded-sm border-[#E7E5E4]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gemini-nano-banana">Gemini Nano Banana</SelectItem>
-                        <SelectItem value="gpt-image-1">GPT Image 1</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">Stile visivo</Label>
-                    <Input
-                      data-testid="cover-style-input"
-                      value={coverStyle}
-                      onChange={(e) => setCoverStyle(e.target.value)}
-                      className="bg-transparent border-0 border-b-2 border-[#E7E5E4] rounded-none focus-visible:ring-0 focus:border-[#722F37] px-0 mt-2"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
-                      Immagine di riferimento (opzionale)
-                    </Label>
-                    <p className="text-xs text-[#57534E] mt-1 mb-3">
-                      Guida la composizione caricando un'immagine. Disponibile con Nano Banana.
-                    </p>
-                    {referenceImage ? (
-                      <div className="flex items-center gap-3">
-                        <img src={referenceImage} alt="riferimento" className="w-16 h-16 object-cover rounded-sm border border-[#E7E5E4]" data-testid="reference-preview" />
-                        <span className="text-sm text-[#57534E] truncate max-w-[160px]">{referenceName}</span>
-                        <button
-                          onClick={() => { setReferenceImage(null); setReferenceName(""); }}
-                          data-testid="remove-reference-btn"
-                          className="text-[#57534E] hover:text-[#722F37]"
-                        >
-                          <X className="w-4 h-4" strokeWidth={1.5} />
-                        </button>
-                      </div>
-                    ) : (
-                      <label
-                        data-testid="reference-upload-label"
-                        className="inline-flex items-center gap-2 border border-dashed border-[#E7E5E4] hover:border-[#722F37] rounded-sm px-4 py-2.5 text-sm text-[#57534E] cursor-pointer transition-colors"
-                      >
-                        <Upload className="w-4 h-4" strokeWidth={1.5} /> Carica immagine
-                        <input type="file" accept="image/*" className="hidden" onChange={onReferenceSelect} data-testid="reference-input" />
-                      </label>
-                    )}
-                  </div>
-                  <button
-                    onClick={generateCover}
-                    disabled={coverLoading}
-                    data-testid="generate-cover-btn"
-                    className="flex items-center gap-2 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-6 py-3 font-medium transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60"
-                  >
-                    {coverLoading ? (
-                      <>
-                        <Sparkles className="w-5 h-5 animate-pulse" strokeWidth={1.5} /> Generazione…
-                      </>
-                    ) : (
-                      <>
-                        <ImagePlus className="w-5 h-5" strokeWidth={1.5} /> Genera copertina
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <CoverStudio
+              coverImage={book.cover_image}
+              coverModel={coverModel}
+              setCoverModel={setCoverModel}
+              coverStyle={coverStyle}
+              setCoverStyle={setCoverStyle}
+              referenceImage={referenceImage}
+              referenceName={referenceName}
+              onReferenceSelect={onReferenceSelect}
+              onRemoveReference={removeReference}
+              coverLoading={coverLoading}
+              onGenerate={generateCover}
+            />
           </TabsContent>
         </Tabs>
       </main>
@@ -649,61 +331,16 @@ export default function BookView() {
         initial={editChar}
       />
 
-      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-        <DialogContent className="bg-[#FDFBF7] border-[#E7E5E4] max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-serif text-2xl text-[#1C1917]">Condividi il libro</DialogTitle>
-          </DialogHeader>
-          <div className="py-2">
-            {book.is_public ? (
-              <>
-                <p className="text-sm text-[#57534E] mb-4">
-                  Chiunque abbia questo link può leggere il libro (sola lettura).
-                </p>
-                <div className="flex items-center gap-2 mb-6">
-                  <Input
-                    readOnly
-                    value={shareUrl}
-                    data-testid="share-url-input"
-                    className="rounded-sm border-[#E7E5E4] text-sm"
-                  />
-                  <button
-                    onClick={copyShareUrl}
-                    data-testid="copy-share-url-btn"
-                    className="shrink-0 flex items-center gap-1.5 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-4 py-2.5 text-sm font-medium transition-colors"
-                  >
-                    {copied ? <Check className="w-4 h-4" strokeWidth={2} /> : <Copy className="w-4 h-4" strokeWidth={1.5} />}
-                    {copied ? "Copiato" : "Copia"}
-                  </button>
-                </div>
-                <button
-                  onClick={() => toggleShare(false)}
-                  disabled={sharing}
-                  data-testid="unshare-btn"
-                  className="text-sm text-[#722F37] hover:underline disabled:opacity-60"
-                >
-                  Disattiva condivisione pubblica
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-[#57534E] mb-6">
-                  Crea un link pubblico in sola lettura con copertina, capitoli e personaggi.
-                </p>
-                <button
-                  onClick={() => toggleShare(true)}
-                  disabled={sharing}
-                  data-testid="make-public-btn"
-                  className="flex items-center gap-2 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-6 py-3 text-sm font-medium transition-colors disabled:opacity-60"
-                >
-                  <Share2 className="w-4 h-4" strokeWidth={1.5} />
-                  {sharing ? "Attivazione…" : "Genera link pubblico"}
-                </button>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        isPublic={book.is_public}
+        shareUrl={shareUrl}
+        copied={copied}
+        sharing={sharing}
+        onToggle={toggleShare}
+        onCopy={copyShareUrl}
+      />
     </div>
   );
 }
