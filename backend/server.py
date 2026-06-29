@@ -472,6 +472,7 @@ async def generate_outline_ep(book_id: str, user: User = Depends(get_current_use
         "capitoli": capitoli,
         "characters": merged_chars if merged_chars else doc.get("characters", []),
         "status": "in_scrittura",
+        "riassunto": "",
     }
     await db.books.update_one({"id": book_id}, {"$set": update})
     await deduct_credits(user.user_id, cost)
@@ -499,9 +500,24 @@ async def generate_chapter_ep(
     capitoli[payload.index]["contenuto"] = contenuto
     done = all(c.get("contenuto") for c in capitoli)
     status = "completato" if done else "in_scrittura"
-    await db.books.update_one(
-        {"id": book_id}, {"$set": {"capitoli": capitoli, "status": status}}
-    )
+    set_fields = {"capitoli": capitoli, "status": status}
+
+    # Maintain a running "story so far" summary for long-book coherence.
+    # Non-fatal: a failure here must not break chapter generation.
+    try:
+        new_summary = await ai_service.update_summary(
+            doc.get("riassunto", ""),
+            payload.index,
+            contenuto,
+            capitoli[payload.index].get("titolo", ""),
+            doc.get("model", "claude-sonnet-4-5-20250929"),
+        )
+        if new_summary:
+            set_fields["riassunto"] = new_summary
+    except Exception as e:
+        logger.warning(f"Aggiornamento riassunto fallito (non bloccante): {e}")
+
+    await db.books.update_one({"id": book_id}, {"$set": set_fields})
     await deduct_credits(user.user_id, cost)
     return {
         "index": payload.index,

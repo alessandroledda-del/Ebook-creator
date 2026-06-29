@@ -329,6 +329,13 @@ async def generate_chapter(book: dict, index: int, instruction: str = "") -> str
     pov = book.get("pov", "")
     length_hint = _length_hint(book.get("lunghezza", "media"))
 
+    riassunto = book.get("riassunto", "")
+    summary_txt = (
+        f"\nRIASSUNTO DELLA STORIA FINORA (rispetta questi fatti per la coerenza globale):\n{riassunto}\n"
+        if riassunto and not instruction
+        else ""
+    )
+
     existing_txt = ""
     if instruction and current.get("contenuto"):
         existing_txt = (
@@ -351,7 +358,7 @@ async def generate_chapter(book: dict, index: int, instruction: str = "") -> str
 
 SINOSSI: {book.get('sinossi', '')}
 {_style_directives(tono, pov)}
-
+{summary_txt}
 PERSONAGGI:
 {chars_txt}
 
@@ -370,6 +377,33 @@ Non scrivere il titolo del capitolo, solo il testo."""
     ).with_model(provider, model).with_params(max_tokens=5000)
 
     return await chat.send_message(UserMessage(text=prompt))
+
+
+async def update_summary(prev_summary: str, chapter_index: int, chapter_text: str,
+                         titolo: str, model: str) -> str:
+    """Maintain a concise running 'story so far' summary after each chapter.
+    Internal helper (does not consume user credits)."""
+    model = model if model in TEXT_MODELS else "claude-sonnet-4-5-20250929"
+    provider = _provider_for(model)
+    system_message = (
+        "Sei un assistente editoriale. Riassumi in italiano in modo conciso e fattuale, "
+        "senza commenti né abbellimenti."
+    )
+    prompt = f"""RIASSUNTO DELLA STORIA FINORA (può essere vuoto se è l'inizio):
+{prev_summary or "(nessuno: questo è il primo capitolo)"}
+
+NUOVO CAPITOLO {chapter_index + 1} ("{titolo}"):
+{chapter_text[:4000]}
+
+Aggiorna il riassunto integrando gli eventi salienti del nuovo capitolo.
+Scrivi 4-8 frasi in italiano con i soli fatti chiave (eventi, rivelazioni, evoluzione
+dei personaggi e delle relazioni, luoghi). Niente commenti. Restituisci solo il riassunto."""
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"summary-{uuid.uuid4().hex}",
+        system_message=system_message,
+    ).with_model(provider, model).with_params(max_tokens=600)
+    return (await chat.send_message(UserMessage(text=prompt))).strip()
 
 
 def _cover_prompt(title: str, genere: str, sinossi: str, style: str) -> str:
