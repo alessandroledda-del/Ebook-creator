@@ -177,6 +177,9 @@ class BookCreate(BaseModel):
     genere: Optional[str] = ""
     model: str = "claude-sonnet-4-5-20250929"
     num_capitoli: int = 5
+    tono: Optional[str] = "avvincente e coinvolgente"
+    lunghezza: Optional[str] = "media"
+    pov: Optional[str] = "terza"
     characters: List[Character] = []
 
 
@@ -332,6 +335,9 @@ async def create_book(payload: BookCreate, user: User = Depends(get_current_user
         "genere": payload.genere or "",
         "model": payload.model,
         "num_capitoli_richiesti": payload.num_capitoli,
+        "tono": payload.tono or "avvincente e coinvolgente",
+        "lunghezza": payload.lunghezza or "media",
+        "pov": payload.pov or "terza",
         "titolo": "",
         "sottotitolo": "",
         "sinossi": "",
@@ -433,6 +439,8 @@ async def generate_outline_ep(book_id: str, user: User = Depends(get_current_use
             model=doc.get("model", "claude-sonnet-4-5-20250929"),
             num_capitoli=doc.get("num_capitoli_richiesti", 5),
             characters=doc.get("characters", []),
+            tono=doc.get("tono", ""),
+            pov=doc.get("pov", ""),
         )
     except Exception as e:
         logger.error(f"Generazione outline fallita: {e}")

@@ -73,6 +73,101 @@ def _characters_block(characters: list) -> str:
     return "\n".join(lines)
 
 
+# Narrative controls ---------------------------------------------------------
+LENGTH_HINTS = {
+    "breve": "circa 300-450 parole",
+    "media": "circa 550-750 parole",
+    "lunga": "circa 900-1100 parole",
+}
+
+POV_HINTS = {
+    "prima": "prima persona (narratore interno, 'io')",
+    "terza": "terza persona",
+}
+
+
+def _length_hint(lunghezza: str) -> str:
+    return LENGTH_HINTS.get((lunghezza or "media").lower(), LENGTH_HINTS["media"])
+
+
+def _pov_hint(pov: str) -> str:
+    return POV_HINTS.get((pov or "terza").lower(), POV_HINTS["terza"])
+
+
+def _style_directives(tono: str, pov: str) -> str:
+    return (
+        f"Tono narrativo: {tono or 'avvincente e coinvolgente'}. "
+        f"Punto di vista: {_pov_hint(pov)}."
+    )
+
+
+async def _chat_json(provider: str, model: str, system_message: str, prompt: str,
+                     max_tokens: int = 3000, retries: int = 1) -> dict:
+    """Call the LLM and parse a JSON object, retrying on malformed output."""
+    last_err = None
+    attempt_prompt = prompt
+    for attempt in range(retries + 1):
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"json-{uuid.uuid4().hex}",
+            system_message=system_message,
+        ).with_model(provider, model).with_params(max_tokens=max_tokens)
+        response = await chat.send_message(UserMessage(text=attempt_prompt))
+        try:
+            return _extract_json(response)
+        except (json.JSONDecodeError, ValueError) as e:
+            last_err = e
+            logger.warning(f"JSON parse fallito (tentativo {attempt + 1}): {e}")
+            attempt_prompt = (
+                prompt
+                + "\n\nIMPORTANTE: la risposta precedente non era JSON valido. "
+                "Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, nient'altro."
+            )
+    raise ValueError(f"Impossibile ottenere JSON valido dal modello: {last_err}")
+
+
+async def _generate_image(prompt: str, model: str, reference_b64: str = None,
+                          retries: int = 1) -> str:
+    """Generate a single image, returning a base64 data URI. Retries on empty."""
+    use_gpt = model == "gpt-image-1"
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            if use_gpt:
+                gen = OpenAIImageGeneration(api_key=EMERGENT_LLM_KEY)
+                images = await gen.generate_images(
+                    prompt=prompt, model="gpt-image-1",
+                    number_of_images=1, quality="high",
+                )
+                if images:
+                    b64 = base64.b64encode(images[0]).decode("utf-8")
+                    return f"data:image/png;base64,{b64}"
+            else:
+                chat = LlmChat(
+                    api_key=EMERGENT_LLM_KEY,
+                    session_id=f"img-{uuid.uuid4().hex}",
+                    system_message="You are a professional illustrator and cover artist.",
+                ).with_model("gemini", IMAGE_MODELS["gemini-nano-banana"]).with_params(
+                    modalities=["image", "text"]
+                )
+                if reference_b64:
+                    msg = UserMessage(
+                        text="Use the provided image as visual reference (composition, subject, mood). " + prompt,
+                        file_contents=[ImageContent(reference_b64)],
+                    )
+                else:
+                    msg = UserMessage(text=prompt)
+                _text, images = await chat.send_message_multimodal_response(msg)
+                if images:
+                    img = images[0]
+                    return f"data:{img.get('mime_type', 'image/png')};base64,{img['data']}"
+            last_err = "risposta vuota"
+        except Exception as e:
+            last_err = str(e)
+            logger.warning(f"Generazione immagine fallita (tentativo {attempt + 1}): {e}")
+    raise ValueError(f"Nessuna immagine generata: {last_err}")
+
+
 async def generate_book(idea: str, genere: str, model: str, num_capitoli: int,
                         characters: list) -> dict:
     """Generate a full book (title, synopsis, chapters, enriched characters)."""
@@ -146,7 +241,7 @@ Regole:
 
 
 async def generate_outline(idea: str, genere: str, model: str, num_capitoli: int,
-                           characters: list) -> dict:
+                           characters: list, tono: str = "", pov: str = "") -> dict:
     """Generate only the book skeleton: title, synopsis, characters and a
     chapter outline (titles + short summaries). Fast, enables progress UI."""
     model = model if model in TEXT_MODELS else "claude-sonnet-4-5-20250929"
@@ -162,6 +257,7 @@ async def generate_outline(idea: str, genere: str, model: str, num_capitoli: int
 IDEA: {idea}
 GENERE PREFERITO: {genere or "a tua scelta, coerente con l'idea"}
 NUMERO DI CAPITOLI: {num_capitoli}
+{_style_directives(tono, pov)}
 
 PERSONAGGI FORNITI DALL'UTENTE (da integrare e arricchire):
 {_characters_block(characters)}
@@ -185,20 +281,17 @@ Regole:
 - Integra i personaggi forniti e aggiungine altri se utile.
 - Scrivi tutto in italiano. NON scrivere il contenuto completo dei capitoli, solo i sommari."""
 
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"outline-{uuid.uuid4().hex}",
-        system_message=system_message,
-    ).with_model(provider, model).with_params(max_tokens=3000)
+    data = await _chat_json(provider, model, system_message, prompt, max_tokens=3000)
 
-    response = await chat.send_message(UserMessage(text=prompt))
-    data = _extract_json(response)
     data.setdefault("titolo", "Senza titolo")
     data.setdefault("sottotitolo", "")
     data.setdefault("genere", genere or "Narrativa")
     data.setdefault("sinossi", "")
     data.setdefault("personaggi", [])
     data.setdefault("capitoli", [])
+    # Safeguard: never exceed the requested number of chapters (credit safety)
+    if isinstance(data["capitoli"], list) and len(data["capitoli"]) > num_capitoli:
+        data["capitoli"] = data["capitoli"][:num_capitoli]
     return data
 
 
@@ -227,10 +320,14 @@ async def generate_chapter(book: dict, index: int, instruction: str = "") -> str
     if index > 0:
         prev = capitoli[index - 1].get("contenuto", "")
         if prev:
-            prev_txt = f"\nFINE DEL CAPITOLO PRECEDENTE (per continuità):\n...{prev[-800:]}\n"
+            prev_txt = f"\nFINE DEL CAPITOLO PRECEDENTE (per continuità diretta):\n...{prev[-1500:]}\n"
 
     chars = book.get("characters", [])
     chars_txt = _characters_block(chars)
+
+    tono = book.get("tono", "")
+    pov = book.get("pov", "")
+    length_hint = _length_hint(book.get("lunghezza", "media"))
 
     existing_txt = ""
     if instruction and current.get("contenuto"):
@@ -246,12 +343,14 @@ async def generate_chapter(book: dict, index: int, instruction: str = "") -> str
 
     system_message = (
         "Sei un pluripremiato romanziere italiano. Scrivi prosa coinvolgente, "
-        "vivida e curata, esclusivamente in italiano. Restituisci solo il testo "
+        "vivida e curata, esclusivamente in italiano. Mostra invece di raccontare, "
+        "usa dettagli sensoriali e dialoghi credibili. Restituisci solo il testo "
         "narrativo del capitolo, senza titoli, intestazioni o commenti."
     )
     prompt = f"""Stai scrivendo il libro "{book.get('titolo', '')}" ({book.get('genere', '')}).
 
 SINOSSI: {book.get('sinossi', '')}
+{_style_directives(tono, pov)}
 
 PERSONAGGI:
 {chars_txt}
@@ -261,7 +360,7 @@ STRUTTURA DEI CAPITOLI:
 {prev_txt}{existing_txt}{instruction_txt}
 Scrivi ORA il contenuto completo del capitolo {index + 1} dal titolo "{current.get('titolo', '')}"
 (traccia: {current.get('sommario', '')}).
-Lunghezza: 500-800 parole (salvo diversa indicazione nell'istruzione). Prosa narrativa in italiano, coerente con i capitoli vicini.
+Lunghezza: {length_hint} (salvo diversa indicazione nell'istruzione). Mantieni coerenza con i capitoli vicini e con il punto di vista indicato.
 Non scrivere il titolo del capitolo, solo il testo."""
 
     chat = LlmChat(
@@ -273,57 +372,15 @@ Non scrivere il titolo del capitolo, solo il testo."""
     return await chat.send_message(UserMessage(text=prompt))
 
 
-async def generate_portrait(character: dict, model: str = "gemini-nano-banana") -> str:
-    """Generate a character portrait. Returns a base64 data URI (PNG/JPEG)."""
-    nome = character.get("nome", "Personaggio")
-    ruolo = character.get("ruolo", "")
-    descr = character.get("descrizione", "")
-    forza = character.get("punti_forza", "")
-    prompt = (
-        f"Detailed character portrait of a fictional book character named {nome}. "
-        f"Role: {ruolo}. Appearance and personality: {descr}. Notable traits: {forza}. "
-        "Painterly illustrated portrait, head and shoulders, atmospheric lighting, "
-        "rich literary book-illustration style, single character, neutral evocative background. "
-        "Do NOT render any text or letters."
-    )
-    image_model = "gpt-image-1" if model == "gpt-image-1" else "gemini-nano-banana"
-
-    if image_model == "gpt-image-1":
-        gen = OpenAIImageGeneration(api_key=EMERGENT_LLM_KEY)
-        images = await gen.generate_images(
-            prompt=prompt, model="gpt-image-1", number_of_images=1, quality="medium"
-        )
-        if not images:
-            raise ValueError("Nessuna immagine generata (GPT Image 1)")
-        b64 = base64.b64encode(images[0]).decode("utf-8")
-        return f"data:image/png;base64,{b64}"
-
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"portrait-{uuid.uuid4().hex}",
-        system_message="You are a professional character illustrator.",
-    ).with_model("gemini", IMAGE_MODELS["gemini-nano-banana"]).with_params(
-        modalities=["image", "text"]
-    )
-    _text, images = await chat.send_message_multimodal_response(
-        UserMessage(text=prompt)
-    )
-    if not images:
-        raise ValueError("Nessuna immagine generata (Nano Banana)")
-    img = images[0]
-    return f"data:{img.get('mime_type', 'image/png')};base64,{img['data']}"
-
-
-
-
 def _cover_prompt(title: str, genere: str, sinossi: str, style: str) -> str:
     return (
-        f"Professional book cover illustration for a novel titled '{title}'. "
-        f"Genre: {genere}. Visual style: {style}. "
+        f"Professional, award-winning book cover illustration for a novel titled '{title}'. "
+        f"Genre: {genere}. Art direction / visual style: {style}. "
         f"Story essence: {sinossi[:400]}. "
-        "Highly detailed, atmospheric, cinematic lighting, premium publishing quality, "
-        "vertical portrait composition, evocative and artistic. "
-        "Do NOT render any text, letters or titles on the image."
+        "Strong focal subject, evocative symbolism coherent with the genre, "
+        "dramatic cinematic lighting, rich color grading, depth and atmosphere, "
+        "premium publishing quality, vertical portrait composition (taller than wide). "
+        "Negative: no text, no letters, no title, no watermark, no frame, no typography."
     )
 
 
@@ -336,42 +393,27 @@ async def generate_cover(title: str, genere: str, sinossi: str, model: str,
     image_model = "gpt-image-1" if model == "gpt-image-1" else "gemini-nano-banana"
 
     ref_b64 = None
-    if reference_image:
+    if reference_image and image_model != "gpt-image-1":
         ref_b64 = reference_image.split(",", 1)[1] if "," in reference_image else reference_image
 
-    if image_model == "gpt-image-1":
-        # GPT Image 1 (text-to-image only): reference image is not supported.
-        gen = OpenAIImageGeneration(api_key=EMERGENT_LLM_KEY)
-        images = await gen.generate_images(
-            prompt=prompt, model="gpt-image-1", number_of_images=1, quality="medium"
-        )
-        if not images:
-            raise ValueError("Nessuna immagine generata (GPT Image 1)")
-        b64 = base64.b64encode(images[0]).decode("utf-8")
-        return f"data:image/png;base64,{b64}"
+    return await _generate_image(prompt, image_model, reference_b64=ref_b64)
 
-    # Gemini Nano Banana (supports editing from a reference image)
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"cover-{uuid.uuid4().hex}",
-        system_message="You are a professional book cover illustrator.",
-    ).with_model("gemini", IMAGE_MODELS["gemini-nano-banana"]).with_params(
-        modalities=["image", "text"]
+
+async def generate_portrait(character: dict, model: str = "gemini-nano-banana") -> str:
+    """Generate a character portrait. Returns a base64 data URI (PNG/JPEG)."""
+    nome = character.get("nome", "Personaggio")
+    ruolo = character.get("ruolo", "")
+    descr = character.get("descrizione", "")
+    abilita = character.get("abilita", "")
+    forza = character.get("punti_forza", "")
+    prompt = (
+        f"Detailed character portrait of a fictional book character named {nome}. "
+        f"Role: {ruolo}. Appearance and personality: {descr}. "
+        f"Abilities: {abilita}. Notable strengths: {forza}. "
+        "Painterly illustrated portrait, head and shoulders, three-quarter view, "
+        "expressive face, atmospheric lighting, rich literary book-illustration style, "
+        "single character only, evocative but uncluttered background. "
+        "Negative: no text, no letters, no watermark, no multiple people."
     )
-
-    if ref_b64:
-        msg = UserMessage(
-            text=(
-                "Use the provided image as visual reference (composition, subject, mood). "
-                + prompt
-            ),
-            file_contents=[ImageContent(ref_b64)],
-        )
-    else:
-        msg = UserMessage(text=prompt)
-
-    _text, images = await chat.send_message_multimodal_response(msg)
-    if not images:
-        raise ValueError("Nessuna immagine generata (Nano Banana)")
-    img = images[0]
-    return f"data:{img.get('mime_type', 'image/png')};base64,{img['data']}"
+    image_model = "gpt-image-1" if model == "gpt-image-1" else "gemini-nano-banana"
+    return await _generate_image(prompt, image_model)

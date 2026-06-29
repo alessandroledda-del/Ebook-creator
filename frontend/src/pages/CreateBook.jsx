@@ -26,6 +26,9 @@ export default function CreateBook() {
   const [genere, setGenere] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-5-20250929");
   const [numCapitoli, setNumCapitoli] = useState("5");
+  const [tono, setTono] = useState("avvincente e coinvolgente");
+  const [lunghezza, setLunghezza] = useState("media");
+  const [pov, setPov] = useState("terza");
   const [characters, setCharacters] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
@@ -63,6 +66,9 @@ export default function CreateBook() {
         genere,
         model,
         num_capitoli: parseInt(numCapitoli, 10),
+        tono,
+        lunghezza,
+        pov,
         characters,
       });
       const bookId = create.data.id;
@@ -136,7 +142,7 @@ export default function CreateBook() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-12">
           <div>
             <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
-              L'idea del libro
+              L&apos;idea del libro
             </Label>
             <Textarea
               data-testid="idea-input"
@@ -188,6 +194,50 @@ export default function CreateBook() {
             </div>
           </div>
 
+          <div className="grid sm:grid-cols-3 gap-8">
+            <div>
+              <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">Tono narrativo</Label>
+              <Select value={tono} onValueChange={setTono}>
+                <SelectTrigger data-testid="tone-select" className="mt-2 rounded-sm border-[#E7E5E4]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="avvincente e coinvolgente">Avvincente</SelectItem>
+                  <SelectItem value="cupo, teso e drammatico">Cupo e drammatico</SelectItem>
+                  <SelectItem value="ironico e brillante">Ironico</SelectItem>
+                  <SelectItem value="poetico ed evocativo">Poetico</SelectItem>
+                  <SelectItem value="romantico e intimo">Romantico</SelectItem>
+                  <SelectItem value="epico e avventuroso">Epico</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">Lunghezza capitoli</Label>
+              <Select value={lunghezza} onValueChange={setLunghezza}>
+                <SelectTrigger data-testid="length-select" className="mt-2 rounded-sm border-[#E7E5E4]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="breve">Breve (~350 parole)</SelectItem>
+                  <SelectItem value="media">Media (~650 parole)</SelectItem>
+                  <SelectItem value="lunga">Lunga (~1000 parole)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">Punto di vista</Label>
+              <Select value={pov} onValueChange={setPov}>
+                <SelectTrigger data-testid="pov-select" className="mt-2 rounded-sm border-[#E7E5E4]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="terza">Terza persona</SelectItem>
+                  <SelectItem value="prima">Prima persona</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div>
             <div className="flex items-center justify-between mb-4">
               <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
@@ -203,7 +253,7 @@ export default function CreateBook() {
             </div>
             {characters.length === 0 ? (
               <p className="text-sm text-[#57534E] border-b border-[#E7E5E4] pb-4">
-                Non hai aggiunto personaggi. L'AI ne creerà di adatti, oppure aggiungili tu.
+                Non hai aggiunto personaggi. L&apos;AI ne creerà di adatti, oppure aggiungili tu.
               </p>
             ) : (
               <div className="space-y-px bg-[#E7E5E4] border border-[#E7E5E4] rounded-sm overflow-hidden">
