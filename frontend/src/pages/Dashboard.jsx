@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { PenLine, Sparkles } from "lucide-react";
 import Header from "@/components/Header";
 import { BookCard } from "@/components/library/BookCard";
+import { Skeleton } from "@/components/ui/skeleton";
 import api from "@/lib/api";
 import {
   AlertDialog,
@@ -72,7 +73,19 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <p className="text-[#57534E]">Caricamento...</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8" data-testid="books-loading">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="bg-white border border-[#E7E5E4] rounded-sm overflow-hidden">
+                <Skeleton className="aspect-[3/4] w-full rounded-none bg-[#F0EEE7]" />
+                <div className="p-5 space-y-3">
+                  <Skeleton className="h-4 w-24 bg-[#F0EEE7]" />
+                  <Skeleton className="h-6 w-3/4 bg-[#F0EEE7]" />
+                  <Skeleton className="h-4 w-full bg-[#F0EEE7]" />
+                  <Skeleton className="h-4 w-2/3 bg-[#F0EEE7]" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : books.length === 0 ? (
           <div className="border border-dashed border-[#E7E5E4] rounded-sm bg-white py-24 text-center">
             <Sparkles className="w-8 h-8 text-[#722F37] mx-auto mb-4" strokeWidth={1.5} />

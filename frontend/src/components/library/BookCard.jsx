@@ -8,7 +8,7 @@ export const BookCard = ({ book, index, onOpen, onDelete }) => (
     initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.4, delay: index * 0.05 }}
-    className="group bg-white border border-[#E7E5E4] rounded-sm overflow-hidden hover:shadow-md transition-shadow"
+    className="group bg-white border border-[#E7E5E4] rounded-sm overflow-hidden card-lift"
     data-testid="book-card"
   >
     <button onClick={onOpen} className="block w-full text-left">

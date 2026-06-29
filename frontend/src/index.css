@@ -61,3 +61,69 @@
     margin-bottom: 1.25rem;
     line-height: 1.9;
 }
+
+/* ---------- Professional polish utilities ---------- */
+
+/* Subtle film grain overlay for depth (place inside a relative container) */
+.grain-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Premium book presentation: spine + perspective */
+.book-3d {
+    transform: perspective(1200px) rotateY(-14deg) rotateX(2deg);
+    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.6s ease;
+    box-shadow: -22px 28px 50px -18px rgba(28, 25, 23, 0.45);
+}
+.book-3d:hover {
+    transform: perspective(1200px) rotateY(-6deg) rotateX(1deg) translateY(-6px);
+    box-shadow: -16px 34px 60px -16px rgba(114, 47, 55, 0.4);
+}
+.book-3d::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.28), rgba(255, 255, 255, 0.12) 60%, rgba(0, 0, 0, 0.18));
+}
+.book-3d::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, rgba(255, 255, 255, 0.22), transparent 38%);
+    pointer-events: none;
+}
+
+/* Card lift */
+.card-lift {
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s ease;
+}
+.card-lift:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 24px 48px -24px rgba(28, 25, 23, 0.35);
+}
+
+/* Animated underline for links */
+.link-underline {
+    background-image: linear-gradient(#722F37, #722F37);
+    background-size: 0% 1.5px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    transition: background-size 0.35s ease;
+}
+.link-underline:hover {
+    background-size: 100% 1.5px;
+}
+
+/* Entrance keyframes (CSS-only fallback) */
+@keyframes float-slow {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+.animate-float { animation: float-slow 6s ease-in-out infinite; }
