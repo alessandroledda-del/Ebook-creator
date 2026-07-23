@@ -1,11 +1,12 @@
 require('dotenv').config();
 
 const validateEnv = require('./config/validateEnv');
+const logger = require('./config/logger');
 
 try {
   validateEnv();
 } catch (error) {
-  console.error(`❌ ${error.message}`);
+  logger.error('Configurazione ambiente non valida', { error: error.message });
   process.exit(1);
 }
 
@@ -14,7 +15,6 @@ const cors = require('cors');
 const { randomUUID } = require('crypto');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
-const logger = require('./config/logger');
 
 const authRoutes = require('./routes/auth');
 const bookRoutes = require('./routes/books');
