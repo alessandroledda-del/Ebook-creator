@@ -1,8 +1,15 @@
+const logger = require('../config/logger');
+
 const errorHandler = (err, req, res, next) => {
-  console.error(`[${new Date().toISOString()}] ERROR: ${err.message}`);
-  if (err.stack) {
-    console.error(err.stack);
-  }
+  logger.error('Unhandled error', {
+    reqId: req.id,
+    userId: req.user?.id,
+    userRole: req.user?.role,
+    method: req.method,
+    path: req.originalUrl,
+    error: err.message,
+    stack: err.stack
+  });
 
   if (err.name === 'ValidationError') {
     const errors = Object.values(err.errors).map((e) => e.message);
@@ -29,7 +36,7 @@ const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   const message = err.message || 'Errore interno del server';
 
-  res.status(status).json({ error: message });
+  return res.status(status).json({ error: message });
 };
 
 module.exports = errorHandler;

@@ -1,5 +1,6 @@
-process.env.JWT_SECRET = 'test-secret-key';
+process.env.JWT_SECRET = 'test-secret-key-with-at-least-32-characters';
 process.env.MONGO_URI = 'mongodb://localhost:27017/test';
+process.env.NODE_ENV = 'development';
 
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
@@ -318,5 +319,4 @@ describe('GET /api/users/:id', () => {
     expect(res.statusCode).toBe(401);
   });
 });
-
 

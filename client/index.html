@@ -54,15 +54,17 @@
         <div id="authSection">
             <h2>🔐 Accesso</h2>
             <div class="form-row">
-                <input type="email" id="loginEmail" placeholder="Email" />
-                <input type="password" id="loginPassword" placeholder="Password" />
+                <input type="email" id="loginEmail" placeholder="Email login" />
+                <input type="password" id="loginPassword" placeholder="Password login" />
                 <button onclick="login()">Accedi</button>
                 <button onclick="register()">Registrati</button>
                 <button id="logoutBtn" onclick="logout()" style="display:none">Esci</button>
             </div>
             <p id="authStatus" style="margin:8px 0 0; font-size:14px; color:#555;"></p>
             <div class="form-row" id="registerRow" style="margin-top:10px;">
-                <input type="text" id="registerName" placeholder="Nome (per registrazione)" />
+                <input type="text" id="registerName" placeholder="Nome registrazione" />
+                <input type="email" id="registerEmail" placeholder="Email registrazione" />
+                <input type="password" id="registerPassword" placeholder="Password registrazione" />
             </div>
         </div>
 
@@ -88,4 +90,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-

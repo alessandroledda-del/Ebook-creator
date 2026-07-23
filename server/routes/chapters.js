@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const Chapter = require('../models/Chapter');
 const Book = require('../models/Book');
 const auth = require('../middleware/auth');
+const logger = require('../config/logger');
 
 const router = express.Router({ mergeParams: true });
 
@@ -15,9 +16,16 @@ router.get('/', async (req, res) => {
   if (!isValidId(req.params.bookId)) return res.status(400).json({ error: 'ID libro non valido' });
   try {
     const chapters = await Chapter.find({ book: req.params.bookId }).sort({ order: 1, chapterNumber: 1 });
-    res.json(chapters);
+    return res.json(chapters);
   } catch (err) {
-    res.status(500).json({ error: 'Errore nel recupero dei capitoli' });
+    logger.error('Errore nel recupero dei capitoli', {
+      reqId: req.id,
+      path: req.originalUrl,
+      bookId: req.params.bookId,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(500).json({ error: 'Errore nel recupero dei capitoli' });
   }
 });
 
@@ -29,9 +37,17 @@ router.get('/:chapterId', async (req, res) => {
   try {
     const chapter = await Chapter.findOne({ _id: req.params.chapterId, book: req.params.bookId });
     if (!chapter) return res.status(404).json({ error: 'Capitolo non trovato' });
-    res.json(chapter);
+    return res.json(chapter);
   } catch (err) {
-    res.status(500).json({ error: 'Errore nel recupero del capitolo' });
+    logger.error('Errore nel recupero del capitolo', {
+      reqId: req.id,
+      path: req.originalUrl,
+      bookId: req.params.bookId,
+      chapterId: req.params.chapterId,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(500).json({ error: 'Errore nel recupero del capitolo' });
   }
 });
 
@@ -61,9 +77,17 @@ router.post('/', auth, async (req, res) => {
       wordCount
     });
 
-    res.status(201).json(chapter);
+    return res.status(201).json(chapter);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    logger.error('Errore creazione capitolo', {
+      reqId: req.id,
+      userId: req.user?.id,
+      path: req.originalUrl,
+      bookId: req.params.bookId,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(400).json({ error: err.message });
   }
 });
 
@@ -91,9 +115,18 @@ router.put('/:chapterId', auth, async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    res.json(updated);
+    return res.json(updated);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    logger.error('Errore aggiornamento capitolo', {
+      reqId: req.id,
+      userId: req.user?.id,
+      path: req.originalUrl,
+      bookId: req.params.bookId,
+      chapterId: req.params.chapterId,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(400).json({ error: err.message });
   }
 });
 
@@ -113,9 +146,18 @@ router.delete('/:chapterId', auth, async (req, res) => {
     const chapter = await Chapter.findOneAndDelete({ _id: req.params.chapterId, book: req.params.bookId });
     if (!chapter) return res.status(404).json({ error: 'Capitolo non trovato' });
 
-    res.json({ message: 'Capitolo eliminato con successo' });
+    return res.json({ message: 'Capitolo eliminato con successo' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logger.error('Errore eliminazione capitolo', {
+      reqId: req.id,
+      userId: req.user?.id,
+      path: req.originalUrl,
+      bookId: req.params.bookId,
+      chapterId: req.params.chapterId,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(500).json({ error: err.message });
   }
 });
 

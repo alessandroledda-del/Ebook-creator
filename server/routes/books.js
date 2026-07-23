@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Book = require('../models/Book');
 const auth = require('../middleware/auth');
+const logger = require('../config/logger');
 
 const router = express.Router();
 
@@ -12,8 +13,8 @@ function isValidId(id) {
 // GET /api/books  –  public, with pagination
 router.get('/', async (req, res) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
     const skip = (page - 1) * limit;
 
     const [books, total] = await Promise.all([
@@ -25,12 +26,18 @@ router.get('/', async (req, res) => {
       Book.countDocuments()
     ]);
 
-    res.json({
+    return res.json({
       books,
       pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     });
   } catch (err) {
-    res.status(500).json({ error: 'Errore nel recupero dei libri' });
+    logger.error('Errore nel recupero dei libri', {
+      reqId: req.id,
+      path: req.originalUrl,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(500).json({ error: 'Errore nel recupero dei libri' });
   }
 });
 
@@ -40,9 +47,15 @@ router.get('/:id', async (req, res) => {
   try {
     const book = await Book.findById(req.params.id).populate('userId', 'name email');
     if (!book) return res.status(404).json({ error: 'Libro non trovato' });
-    res.json(book);
+    return res.json(book);
   } catch (err) {
-    res.status(500).json({ error: 'Errore nel recupero del libro' });
+    logger.error('Errore nel recupero del libro', {
+      reqId: req.id,
+      path: req.originalUrl,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(500).json({ error: 'Errore nel recupero del libro' });
   }
 });
 
@@ -66,9 +79,16 @@ router.post('/', auth, async (req, res) => {
       tags
     });
 
-    res.status(201).json(book);
+    return res.status(201).json(book);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    logger.error('Errore creazione libro', {
+      reqId: req.id,
+      userId: req.user?.id,
+      path: req.originalUrl,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(400).json({ error: err.message });
   }
 });
 
@@ -91,9 +111,16 @@ router.put('/:id', auth, async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    res.json(updated);
+    return res.json(updated);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    logger.error('Errore aggiornamento libro', {
+      reqId: req.id,
+      userId: req.user?.id,
+      path: req.originalUrl,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(400).json({ error: err.message });
   }
 });
 
@@ -109,9 +136,16 @@ router.delete('/:id', auth, async (req, res) => {
     }
 
     await Book.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Libro eliminato con successo' });
+    return res.json({ message: 'Libro eliminato con successo' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logger.error('Errore eliminazione libro', {
+      reqId: req.id,
+      userId: req.user?.id,
+      path: req.originalUrl,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(500).json({ error: err.message });
   }
 });
 

@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
+const logger = require('../config/logger');
 
 const router = express.Router();
 
@@ -33,13 +34,20 @@ router.post('/register', authLimiter, async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       token,
       user: { id: user._id, name: user.name, email: user.email, role: user.role }
     });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    logger.error('Registrazione fallita', {
+      reqId: req.id,
+      userId: req.user?.id,
+      email: req.body?.email,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(400).json({ success: false, message: err.message });
   }
 });
 
@@ -68,13 +76,20 @@ router.post('/login', authLimiter, async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    res.json({
+    return res.json({
       success: true,
       token,
       user: { id: user._id, name: user.name, email: user.email, role: user.role }
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    logger.error('Login fallito', {
+      reqId: req.id,
+      userId: req.user?.id,
+      email: req.body?.email,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 

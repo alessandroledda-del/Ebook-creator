@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const logger = require('../config/logger');
 
 const router = express.Router();
 
@@ -20,9 +21,16 @@ router.get('/:id', auth, async (req, res) => {
     const user = await User.findById(req.params.id).select('-password');
     if (!user) return res.status(404).json({ error: 'Utente non trovato' });
 
-    res.json(user);
+    return res.json(user);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logger.error('Errore recupero utente', {
+      reqId: req.id,
+      userId: req.user?.id,
+      path: req.originalUrl,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -44,9 +52,16 @@ router.put('/:id', auth, async (req, res) => {
 
     if (!updated) return res.status(404).json({ error: 'Utente non trovato' });
 
-    res.json(updated);
+    return res.json(updated);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    logger.error('Errore aggiornamento utente', {
+      reqId: req.id,
+      userId: req.user?.id,
+      path: req.originalUrl,
+      error: err.message,
+      stack: err.stack
+    });
+    return res.status(400).json({ error: err.message });
   }
 });
 
