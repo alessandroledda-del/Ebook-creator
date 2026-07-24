@@ -28,6 +28,8 @@ from reportlab.lib.colors import HexColor
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, PageBreak,
 )
+from ebooklib import epub
+from xml.sax.saxutils import escape
 
 
 def build_book_pdf(doc: dict) -> bytes:
@@ -95,6 +97,75 @@ def build_book_pdf(doc: dict) -> bytes:
     pdf.build(story)
     buf.seek(0)
     return buf.read()
+
+
+EPUB_CSS = """
+body { font-family: Georgia, 'Times New Roman', serif; color: #1C1917; line-height: 1.7; margin: 6% 8%; }
+h1 { font-size: 2.2em; text-align: center; line-height: 1.1; margin: 0.4em 0; }
+h2 { font-size: 1.5em; margin: 0.2em 0 0.8em; }
+p { text-align: justify; margin: 0 0 0.8em; text-indent: 1.2em; }
+p.overline { text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.75em; color: #722F37; font-weight: bold; text-align: left; text-indent: 0; }
+p.synopsis { font-style: italic; text-align: center; color: #57534E; text-indent: 0; margin-top: 1.5em; }
+.title-page { text-align: center; }
+"""
+
+
+def build_book_epub(doc: dict) -> bytes:
+    """Render a book document to an EPUB (bytes)."""
+    book = epub.EpubBook()
+    book.set_identifier(doc.get("id", "libroteca"))
+    book.set_title(doc.get("titolo", "Senza titolo"))
+    book.set_language("it")
+    book.add_author(doc.get("autore") or "Libroteca AI")
+
+    css = epub.EpubItem(
+        uid="style", file_name="style/main.css",
+        media_type="text/css", content=EPUB_CSS.encode("utf-8"),
+    )
+    book.add_item(css)
+
+    genere = (doc.get("genere") or "Narrativa").upper()
+    titolo = doc.get("titolo", "Senza titolo")
+    sottotitolo = doc.get("sottotitolo") or ""
+    sinossi = doc.get("sinossi") or ""
+
+    intro = epub.EpubHtml(title=titolo, file_name="title.xhtml", lang="it")
+    sub_html = f"<p class='synopsis'>{escape(sottotitolo)}</p>" if sottotitolo else ""
+    syn_html = f"<p class='synopsis'>{escape(sinossi)}</p>" if sinossi else ""
+    intro.content = (
+        f"<html><head></head><body class='title-page'>"
+        f"<p class='overline'>{escape(genere)}</p>"
+        f"<h1>{escape(titolo)}</h1>{sub_html}{syn_html}</body></html>"
+    )
+    intro.add_item(css)
+    book.add_item(intro)
+
+    toc, spine = [], ["nav", intro]
+    for i, ch in enumerate(doc.get("capitoli", [])):
+        c = epub.EpubHtml(title=ch.get("titolo", ""), file_name=f"chap_{i + 1}.xhtml", lang="it")
+        paras = "".join(
+            f"<p>{escape(p.strip())}</p>"
+            for p in (ch.get("contenuto", "") or "").split("\n") if p.strip()
+        )
+        c.content = (
+            f"<html><head></head><body>"
+            f"<p class='overline'>CAPITOLO {i + 1}</p>"
+            f"<h2>{escape(ch.get('titolo', ''))}</h2>{paras}</body></html>"
+        )
+        c.add_item(css)
+        book.add_item(c)
+        toc.append(c)
+        spine.append(c)
+
+    book.toc = tuple(toc)
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    book.spine = spine
+
+    out = io.BytesIO()
+    epub.write_epub(out, book)
+    out.seek(0)
+    return out.read()
 
 
 
@@ -596,6 +667,20 @@ async def export_book_pdf(book_id: str, user: User = Depends(get_current_user)):
         iter([pdf_bytes]),
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'},
+    )
+
+
+@api_router.get("/books/{book_id}/export/epub")
+async def export_book_epub(book_id: str, user: User = Depends(get_current_user)):
+    doc = await db.books.find_one({"id": book_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    epub_bytes = build_book_epub(doc)
+    filename = (doc.get("titolo") or "libro").replace(" ", "_")[:40]
+    return StreamingResponse(
+        iter([epub_bytes]),
+        media_type="application/epub+zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.epub"'},
     )
 
 

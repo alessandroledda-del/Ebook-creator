@@ -30,6 +30,7 @@ export default function BookView() {
   const [coverStyle, setCoverStyle] = useState("elegante e cinematografico");
   const [coverLoading, setCoverLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingEpub, setDownloadingEpub] = useState(false);
   const [referenceImage, setReferenceImage] = useState(null);
   const [referenceName, setReferenceName] = useState("");
 
@@ -158,6 +159,25 @@ export default function BookView() {
     }
   };
 
+  const downloadEpub = async () => {
+    setDownloadingEpub(true);
+    try {
+      const res = await api.get(`/books/${id}/export/epub`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/epub+zip" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(book.titolo || "libro").replace(/\s+/g, "_")}.epub`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Download EPUB non riuscito");
+    } finally {
+      setDownloadingEpub(false);
+    }
+  };
+
   const generateCover = async () => {
     setCoverLoading(true);
     try {
@@ -261,7 +281,9 @@ export default function BookView() {
         <BookMeta
           book={book}
           downloading={downloading}
+          downloadingEpub={downloadingEpub}
           onDownload={downloadPdf}
+          onDownloadEpub={downloadEpub}
           onShare={() => setShareOpen(true)}
         />
 
@@ -280,6 +302,7 @@ export default function BookView() {
               activeChapter={activeChapter}
               setActiveChapter={setActiveChapter}
               paragraphs={activeParagraphs}
+              riassunto={book.riassunto}
               regenerating={regenerating}
               customInstr={customInstr}
               setCustomInstr={setCustomInstr}

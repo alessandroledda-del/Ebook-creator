@@ -1,7 +1,7 @@
-import { Download, Share2 } from "lucide-react";
+import { Download, Share2, BookMarked } from "lucide-react";
 import { BOOK_MOCKUP } from "@/components/book/media";
 
-export const BookMeta = ({ book, downloading, onDownload, onShare }) => (
+export const BookMeta = ({ book, downloading, downloadingEpub, onDownload, onDownloadEpub, onShare }) => (
   <div className="flex flex-col lg:flex-row gap-8 mb-10">
     <img
       src={book.cover_image || BOOK_MOCKUP}
@@ -30,6 +30,15 @@ export const BookMeta = ({ book, downloading, onDownload, onShare }) => (
           >
             <Download className="w-4 h-4" strokeWidth={1.5} />
             {downloading ? "Preparazione…" : "Scarica PDF"}
+          </button>
+          <button
+            onClick={onDownloadEpub}
+            disabled={downloadingEpub}
+            data-testid="download-epub-btn"
+            className="inline-flex items-center gap-2 border border-[#E7E5E4] text-[#1C1917] hover:border-[#722F37] hover:text-[#722F37] rounded-sm px-5 py-2.5 text-sm font-medium transition-colors duration-300 disabled:opacity-60"
+          >
+            <BookMarked className="w-4 h-4" strokeWidth={1.5} />
+            {downloadingEpub ? "Preparazione…" : "Scarica EPUB"}
           </button>
           <button
             onClick={onShare}
