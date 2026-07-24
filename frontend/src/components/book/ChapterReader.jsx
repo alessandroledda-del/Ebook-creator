@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Sparkles } from "lucide-react";
+import { RotateCcw, Sparkles, ScrollText, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 const PRESETS = [
@@ -15,11 +16,13 @@ export const ChapterReader = ({
   activeChapter,
   setActiveChapter,
   paragraphs,
+  riassunto,
   regenerating,
   customInstr,
   setCustomInstr,
   onRegenerate,
 }) => {
+  const [recapOpen, setRecapOpen] = useState(false);
   if (chapters.length === 0) {
     return <p className="text-[#57534E]">Nessun capitolo disponibile.</p>;
   }
@@ -42,6 +45,31 @@ export const ChapterReader = ({
             </button>
           ))}
         </nav>
+
+        {riassunto && (
+          <div className="mt-6 pt-5 border-t border-[#E7E5E4]" data-testid="plot-recap">
+            <button
+              onClick={() => setRecapOpen((o) => !o)}
+              data-testid="plot-recap-toggle"
+              className="flex items-center justify-between w-full text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold"
+            >
+              <span className="flex items-center gap-2">
+                <ScrollText className="w-3.5 h-3.5" strokeWidth={2} /> Riepilogo trama
+              </span>
+              <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${recapOpen ? "rotate-180" : ""}`} strokeWidth={1.5} />
+            </button>
+            {recapOpen && (
+              <motion.p
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="text-sm text-[#57534E] leading-relaxed mt-3 italic"
+                data-testid="plot-recap-text"
+              >
+                {riassunto}
+              </motion.p>
+            )}
+          </div>
+        )}
       </aside>
       <motion.article
         key={activeChapter}
