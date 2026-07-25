@@ -4,12 +4,14 @@ Handles book text generation (Claude Sonnet 4.5 / GPT-5.2) and
 book cover image generation (Gemini Nano Banana / GPT Image 1)
 through the Emergent universal LLM key.
 """
+import asyncio
 import os
 import re
 import json
 import base64
 import logging
 import uuid
+from typing import Any, Dict, List, Optional, TypedDict
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -35,12 +37,45 @@ IMAGE_MODELS = {
     "gpt-image-1": "gpt-image-1",
 }
 
+# Retry / timeout configuration
+_LLM_TEXT_TIMEOUT: float = 120.0   # seconds for text generation
+_LLM_JSON_TIMEOUT: float = 90.0    # seconds for JSON-returning calls
+_LLM_IMAGE_TIMEOUT: float = 120.0  # seconds for image generation
+_MAX_LLM_RETRIES: int = 2          # additional attempts (total = _MAX_LLM_RETRIES + 1)
+_RETRY_BASE_DELAY: float = 2.0     # base delay in seconds (doubles each retry)
+
+
+# ---------------------- TypedDicts for structured responses -----------------
+class CharacterDict(TypedDict, total=False):
+    id: str
+    nome: str
+    ruolo: str
+    descrizione: str
+    abilita: str
+    punti_forza: str
+    punti_debolezza: str
+
+
+class ChapterDict(TypedDict, total=False):
+    titolo: str
+    sommario: str
+    contenuto: str
+
+
+class BookDict(TypedDict, total=False):
+    titolo: str
+    sottotitolo: str
+    genere: str
+    sinossi: str
+    personaggi: List[CharacterDict]
+    capitoli: List[ChapterDict]
+
 
 def _provider_for(model: str) -> str:
     return TEXT_MODELS.get(model, "anthropic")
 
 
-def _extract_json(raw: str) -> dict:
+def _extract_json(raw: str) -> Dict[str, Any]:
     """Robustly extract a JSON object from an LLM response."""
     if not raw:
         raise ValueError("Risposta vuota dal modello")
@@ -58,7 +93,7 @@ def _extract_json(raw: str) -> dict:
         raise
 
 
-def _characters_block(characters: list) -> str:
+def _characters_block(characters: List[Dict[str, Any]]) -> str:
     if not characters:
         return "Nessun personaggio fornito: inventane tu di adatti alla storia."
     lines = []
@@ -102,42 +137,112 @@ def _style_directives(tono: str, pov: str) -> str:
 
 
 async def _chat_json(provider: str, model: str, system_message: str, prompt: str,
-                     max_tokens: int = 3000, retries: int = 1) -> dict:
-    """Call the LLM and parse a JSON object, retrying on malformed output."""
-    last_err = None
+                     max_tokens: int = 3000, retries: int = _MAX_LLM_RETRIES,
+                     timeout: float = _LLM_JSON_TIMEOUT) -> Dict[str, Any]:
+    """Call the LLM and parse a JSON object.
+
+    Retries on both transient network/timeout errors and malformed JSON output
+    using exponential backoff. Raises RuntimeError after all attempts fail.
+    """
+    last_err: Optional[Exception] = None
     attempt_prompt = prompt
     for attempt in range(retries + 1):
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"json-{uuid.uuid4().hex}",
-            system_message=system_message,
-        ).with_model(provider, model).with_params(max_tokens=max_tokens)
-        response = await chat.send_message(UserMessage(text=attempt_prompt))
+        if attempt > 0:
+            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            logger.info(f"_chat_json retry {attempt}/{retries} in {delay:.1f}s")
+            await asyncio.sleep(delay)
         try:
-            return _extract_json(response)
-        except (json.JSONDecodeError, ValueError) as e:
-            last_err = e
-            logger.warning(f"JSON parse fallito (tentativo {attempt + 1}): {e}")
-            attempt_prompt = (
-                prompt
-                + "\n\nIMPORTANTE: la risposta precedente non era JSON valido. "
-                "Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, nient'altro."
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"json-{uuid.uuid4().hex}",
+                system_message=system_message,
+            ).with_model(provider, model).with_params(max_tokens=max_tokens)
+            response = await asyncio.wait_for(
+                chat.send_message(UserMessage(text=attempt_prompt)),
+                timeout=timeout,
             )
-    raise ValueError(f"Impossibile ottenere JSON valido dal modello: {last_err}")
+            try:
+                return _extract_json(response)
+            except (json.JSONDecodeError, ValueError) as e:
+                last_err = e
+                logger.warning(f"JSON parse fallito (tentativo {attempt + 1}): {e}")
+                attempt_prompt = (
+                    prompt
+                    + "\n\nIMPORTANTE: la risposta precedente non era JSON valido. "
+                    "Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, nient'altro."
+                )
+        except asyncio.TimeoutError:
+            last_err = TimeoutError(f"Timeout LLM dopo {timeout:.0f}s")
+            logger.warning(f"Timeout LLM in _chat_json (tentativo {attempt + 1})")
+        except Exception as e:
+            last_err = e
+            logger.warning(f"Errore LLM in _chat_json (tentativo {attempt + 1}): {e}")
+    raise RuntimeError(
+        f"Impossibile completare la richiesta LLM dopo {retries + 1} tentativi: {last_err}"
+    )
 
 
-async def _generate_image(prompt: str, model: str, reference_b64: str = None,
-                          retries: int = 1) -> str:
-    """Generate a single image, returning a base64 data URI. Retries on empty."""
-    use_gpt = model == "gpt-image-1"
-    last_err = None
+async def _chat_text(provider: str, model: str, system_message: str, prompt: str,
+                     max_tokens: int = 5000, retries: int = _MAX_LLM_RETRIES,
+                     timeout: float = _LLM_TEXT_TIMEOUT) -> str:
+    """Call the LLM and return plain text.
+
+    Retries on transient errors using exponential backoff.
+    Raises RuntimeError after all attempts fail.
+    """
+    last_err: Optional[Exception] = None
     for attempt in range(retries + 1):
+        if attempt > 0:
+            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            logger.info(f"_chat_text retry {attempt}/{retries} in {delay:.1f}s")
+            await asyncio.sleep(delay)
+        try:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"text-{uuid.uuid4().hex}",
+                system_message=system_message,
+            ).with_model(provider, model).with_params(max_tokens=max_tokens)
+            response = await asyncio.wait_for(
+                chat.send_message(UserMessage(text=prompt)),
+                timeout=timeout,
+            )
+            if not response or not response.strip():
+                raise ValueError("Risposta vuota dal modello")
+            return response
+        except asyncio.TimeoutError:
+            last_err = TimeoutError(f"Timeout LLM dopo {timeout:.0f}s")
+            logger.warning(f"Timeout LLM in _chat_text (tentativo {attempt + 1})")
+        except Exception as e:
+            last_err = e
+            logger.warning(f"Errore LLM in _chat_text (tentativo {attempt + 1}): {e}")
+    raise RuntimeError(
+        f"Impossibile completare la richiesta LLM dopo {retries + 1} tentativi: {last_err}"
+    )
+
+
+async def _generate_image(prompt: str, model: str, reference_b64: Optional[str] = None,
+                          retries: int = _MAX_LLM_RETRIES,
+                          timeout: float = _LLM_IMAGE_TIMEOUT) -> str:
+    """Generate a single image, returning a base64 data URI.
+
+    Retries with exponential backoff on empty results or transient errors.
+    """
+    use_gpt = model == "gpt-image-1"
+    last_err: Optional[Exception] = None
+    for attempt in range(retries + 1):
+        if attempt > 0:
+            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            logger.info(f"_generate_image retry {attempt}/{retries} in {delay:.1f}s")
+            await asyncio.sleep(delay)
         try:
             if use_gpt:
                 gen = OpenAIImageGeneration(api_key=EMERGENT_LLM_KEY)
-                images = await gen.generate_images(
-                    prompt=prompt, model="gpt-image-1",
-                    number_of_images=1, quality="high",
+                images = await asyncio.wait_for(
+                    gen.generate_images(
+                        prompt=prompt, model="gpt-image-1",
+                        number_of_images=1, quality="high",
+                    ),
+                    timeout=timeout,
                 )
                 if images:
                     b64 = base64.b64encode(images[0]).decode("utf-8")
@@ -157,19 +262,25 @@ async def _generate_image(prompt: str, model: str, reference_b64: str = None,
                     )
                 else:
                     msg = UserMessage(text=prompt)
-                _text, images = await chat.send_message_multimodal_response(msg)
+                _text, images = await asyncio.wait_for(
+                    chat.send_message_multimodal_response(msg),
+                    timeout=timeout,
+                )
                 if images:
                     img = images[0]
                     return f"data:{img.get('mime_type', 'image/png')};base64,{img['data']}"
-            last_err = "risposta vuota"
+            last_err = ValueError("risposta vuota dal modello immagine")
+        except asyncio.TimeoutError:
+            last_err = TimeoutError(f"Timeout generazione immagine dopo {timeout:.0f}s")
+            logger.warning(f"Timeout _generate_image (tentativo {attempt + 1})")
         except Exception as e:
-            last_err = str(e)
+            last_err = e
             logger.warning(f"Generazione immagine fallita (tentativo {attempt + 1}): {e}")
-    raise ValueError(f"Nessuna immagine generata: {last_err}")
+    raise RuntimeError(f"Nessuna immagine generata dopo {retries + 1} tentativi: {last_err}")
 
 
 async def generate_book(idea: str, genere: str, model: str, num_capitoli: int,
-                        characters: list) -> dict:
+                        characters: List[Dict[str, Any]]) -> BookDict:
     """Generate a full book (title, synopsis, chapters, enriched characters)."""
     model = model if model in TEXT_MODELS else "claude-sonnet-4-5-20250929"
     provider = _provider_for(model)
@@ -221,14 +332,7 @@ Regole:
 - Mantieni coerenza di trama tra i capitoli (inizio, sviluppo, climax, finale).
 - Scrivi tutto in italiano."""
 
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"book-{uuid.uuid4().hex}",
-        system_message=system_message,
-    ).with_model(provider, model).with_params(max_tokens=8000)
-
-    response = await chat.send_message(UserMessage(text=prompt))
-    data = _extract_json(response)
+    data = await _chat_json(provider, model, system_message, prompt, max_tokens=8000)
 
     # Normalize
     data.setdefault("titolo", "Senza titolo")
@@ -241,7 +345,7 @@ Regole:
 
 
 async def generate_outline(idea: str, genere: str, model: str, num_capitoli: int,
-                           characters: list, tono: str = "", pov: str = "") -> dict:
+                           characters: List[Dict[str, Any]], tono: str = "", pov: str = "") -> BookDict:
     """Generate only the book skeleton: title, synopsis, characters and a
     chapter outline (titles + short summaries). Fast, enables progress UI."""
     model = model if model in TEXT_MODELS else "claude-sonnet-4-5-20250929"
@@ -295,7 +399,7 @@ Regole:
     return data
 
 
-async def generate_chapter(book: dict, index: int, instruction: str = "") -> str:
+async def generate_chapter(book: Dict[str, Any], index: int, instruction: str = "") -> str:
     """Generate the full narrative content for a single chapter, keeping
     continuity with the outline and the previous chapter. An optional
     instruction can steer a rewrite (e.g. make it longer, change tone)."""
@@ -370,13 +474,7 @@ Scrivi ORA il contenuto completo del capitolo {index + 1} dal titolo "{current.g
 Lunghezza: {length_hint} (salvo diversa indicazione nell'istruzione). Mantieni coerenza con i capitoli vicini e con il punto di vista indicato.
 Non scrivere il titolo del capitolo, solo il testo."""
 
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"chapter-{book.get('id', uuid.uuid4().hex)}-{index}-{uuid.uuid4().hex[:6]}",
-        system_message=system_message,
-    ).with_model(provider, model).with_params(max_tokens=5000)
-
-    return await chat.send_message(UserMessage(text=prompt))
+    return await _chat_text(provider, model, system_message, prompt, max_tokens=5000)
 
 
 async def update_summary(prev_summary: str, chapter_index: int, chapter_text: str,
@@ -398,12 +496,10 @@ NUOVO CAPITOLO {chapter_index + 1} ("{titolo}"):
 Aggiorna il riassunto integrando gli eventi salienti del nuovo capitolo.
 Scrivi 4-8 frasi in italiano con i soli fatti chiave (eventi, rivelazioni, evoluzione
 dei personaggi e delle relazioni, luoghi). Niente commenti. Restituisci solo il riassunto."""
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"summary-{uuid.uuid4().hex}",
-        system_message=system_message,
-    ).with_model(provider, model).with_params(max_tokens=600)
-    return (await chat.send_message(UserMessage(text=prompt))).strip()
+    result = await _chat_text(
+        provider, model, system_message, prompt, max_tokens=600, retries=1
+    )
+    return result.strip()
 
 
 def _cover_prompt(title: str, genere: str, sinossi: str, style: str) -> str:
@@ -419,7 +515,7 @@ def _cover_prompt(title: str, genere: str, sinossi: str, style: str) -> str:
 
 
 async def generate_cover(title: str, genere: str, sinossi: str, model: str,
-                         style: str, reference_image: str = None) -> str:
+                         style: str, reference_image: Optional[str] = None) -> str:
     """Generate a book cover. Returns a base64 data URI (PNG/JPEG).
     An optional reference_image (data URI or raw base64) guides the result
     (supported only via Nano Banana editing)."""

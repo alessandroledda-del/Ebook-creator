@@ -9,8 +9,8 @@ import base64
 import logging
 import uuid
 from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Literal, Optional
 from datetime import datetime, timezone, timedelta
 import httpx
 
@@ -230,12 +230,12 @@ async def deduct_credits(user_id: str, cost: int):
 
 class Character(BaseModel):
     id: str = Field(default_factory=lambda: f"char_{uuid.uuid4().hex[:10]}")
-    nome: str
-    ruolo: Optional[str] = ""
-    descrizione: Optional[str] = ""
-    abilita: Optional[str] = ""
-    punti_forza: Optional[str] = ""
-    punti_debolezza: Optional[str] = ""
+    nome: str = Field(..., min_length=1, max_length=100)
+    ruolo: Optional[str] = Field("", max_length=200)
+    descrizione: Optional[str] = Field("", max_length=1000)
+    abilita: Optional[str] = Field("", max_length=500)
+    punti_forza: Optional[str] = Field("", max_length=500)
+    punti_debolezza: Optional[str] = Field("", max_length=500)
 
 
 class Chapter(BaseModel):
@@ -244,28 +244,33 @@ class Chapter(BaseModel):
 
 
 class BookCreate(BaseModel):
-    idea: str
-    genere: Optional[str] = ""
-    model: str = "claude-sonnet-4-5-20250929"
-    num_capitoli: int = 5
-    tono: Optional[str] = "avvincente e coinvolgente"
-    lunghezza: Optional[str] = "media"
-    pov: Optional[str] = "terza"
-    characters: List[Character] = []
+    idea: str = Field(..., min_length=10, max_length=2000)
+    genere: Optional[str] = Field("", max_length=100)
+    model: Literal["gpt-5.2", "claude-sonnet-4-5-20250929"] = "claude-sonnet-4-5-20250929"
+    num_capitoli: int = Field(5, ge=3, le=10)
+    tono: Optional[str] = Field("avvincente e coinvolgente", max_length=200)
+    lunghezza: Literal["breve", "media", "lunga"] = "media"
+    pov: Literal["prima", "terza"] = "terza"
+    characters: List[Character] = Field(default_factory=list, max_length=20)
+
+    @field_validator("idea")
+    @classmethod
+    def strip_idea(cls, v: str) -> str:
+        return v.strip()
 
 
 class CharacterInput(BaseModel):
-    nome: str
-    ruolo: Optional[str] = ""
-    descrizione: Optional[str] = ""
-    abilita: Optional[str] = ""
-    punti_forza: Optional[str] = ""
-    punti_debolezza: Optional[str] = ""
+    nome: str = Field(..., min_length=1, max_length=100)
+    ruolo: Optional[str] = Field("", max_length=200)
+    descrizione: Optional[str] = Field("", max_length=1000)
+    abilita: Optional[str] = Field("", max_length=500)
+    punti_forza: Optional[str] = Field("", max_length=500)
+    punti_debolezza: Optional[str] = Field("", max_length=500)
 
 
 class CoverRequest(BaseModel):
-    model: str = "gemini-nano-banana"
-    style: Optional[str] = "elegante e cinematografico"
+    model: Literal["gemini-nano-banana", "gpt-image-1"] = "gemini-nano-banana"
+    style: Optional[str] = Field("elegante e cinematografico", max_length=200)
     reference_image: Optional[str] = None
 
 
@@ -485,12 +490,12 @@ async def generate_book_content(book_id: str, user: User = Depends(get_current_u
 
 
 class ChapterRequest(BaseModel):
-    index: int
+    index: int = Field(..., ge=0)
 
 
 class RegenerateChapterRequest(BaseModel):
-    index: int
-    instruction: str = ""
+    index: int = Field(..., ge=0)
+    instruction: str = Field("", max_length=1000)
 
 
 class PortraitRequest(BaseModel):
@@ -1000,12 +1005,18 @@ async def root():
 
 app.include_router(api_router)
 
+# Build the allowed-origins list, defaulting to localhost for development.
+# In production, set CORS_ORIGINS to a comma-separated list of allowed origins
+# (e.g. "https://myapp.com,https://www.myapp.com").
+_raw_cors = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
+CORS_ORIGINS = [o.strip() for o in _raw_cors.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=CORS_ORIGINS,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
