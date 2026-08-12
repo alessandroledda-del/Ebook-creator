@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 3: validated new Series/Sequel feature and Welcome Email trigger on register. Backend (pytest, 4/4 PASS): list endpoint exposes serie_volume+parent_titolo, POST /books with valid parent inherits characters+contesto_serie+serie_volume=2, invalid parent -> 404, register triggers async welcome email (email logged in backend.err.log with expected Resend testing-mode delivery failure for non-owner recipient). Frontend (all UI flows PASS): dashboard shows Vol.2 badge only on sequel book, parent book page shows 'Scrivi il seguito' button, click navigates to /crea?sequel=<id> with sequel-banner, overline 'Nuovo volume · Vol. 2', prefilled genre/tone/length/pov and inherited characters (Elio Marchetti + Nina), remove-sequel-btn clears banner/characters and reverts overline to 'Nuova opera', in_scrittura sequel book overline shows 'Volume 2 · seguito di «Gli Orologi del Tempo Sospeso»' (serie-volume-label rendered even when status != completato). Regression: UI email/password register still lands on /dashboard with '15 crediti omaggio' welcome toast. No AI generation calls were performed - seed user still at 10 credits.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_series_and_welcome.py",
+    "/app/test_reports/pytest/iteration_3_series.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:446 & :537 fire-and-forget asyncio.create_task(_send_welcome_safe(...)) is not awaited nor stored - if the event loop shuts down before it completes the email send is silently dropped; the _send_welcome_safe wrapper already swallows exceptions so this is acceptable, but consider a lightweight task registry to allow graceful shutdown and observability.",
+    "server.py create_book: contesto_serie is built ONLY at creation time. If the parent later changes (edited chapters, updated riassunto), the sequel keeps the stale snapshot. Consider recomputing on generate-outline for the sequel, or documenting this as intentional to freeze context.",
+    "CreateBook.jsx line 57: inherited characters are copied stripping id and immagine, but tono/lunghezza/pov are unconditionally overwritten from parent - this silently discards any user-typed defaults if the user navigated to /crea WITHOUT sequel first, then added the sequel query param. Minor UX.",
+    "BookMeta.jsx serie-volume-label uses a leading '·' inside the span so full rendering becomes 'Fantasy · Volume 2 · seguito di ...' when genre is set, but produces ' · Volume 2 ...' (leading dot) when genre is empty. Consider conditional separator.",
+    "server.py _book_summary defaults serie_volume to 1 always - correct, but list endpoint returns raw dict (no Pydantic model) so future field additions are untyped."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_series_and_welcome.py"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% of tested flows"},
+  "test_credentials": "test@libroteca.ai / Test1234! (verified intact, 10 credits, seed books book_parent_test01 and book_341e3efcc848 present)",
+  "seed_data_creation": "Transient throwaway registrations created via UI (ui_reg_*) and API (test_welcome_*) during tests. Sequel books created in test_create_book_with_valid_parent_inherits_context are cleaned up in finally block via DELETE /api/books/{id}. No seed data left behind by pytest.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login submit button data-testid is 'login-submit-btn' (NOT 'login-submit' as reported in iter 2). Register button testid: 'register-submit-btn'. Series testids: dashboard card 'serie-volume-badge', book page 'create-sequel-btn' (only when status=completato) + 'serie-volume-label' (always shown when serie_volume>1), /crea page 'sequel-banner' + 'remove-sequel-btn'. Seed books: book_parent_test01 (Vol.1 completato, 'Gli Orologi del Tempo Sospeso') and book_341e3efcc848 (Vol.2 in_scrittura, 'Il Ritorno della Frattura'). Resend testing mode delivers only to alessandro.ledda@tempocasa.com - other recipients get logged failure but /auth/register still returns 200 (expected). Do NOT trigger AI generation from UI - test user has only 10 credits.",
+  "rca of the issue": "N/A - all features work as designed."
+}

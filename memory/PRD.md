@@ -36,6 +36,8 @@
 - Protezione brute force (5 tentativi = lockout 15 min), indice unico email, seeding test user
 - 15 crediti di benvenuto anche per registrazione email; interceptor axios refresh automatico
 - Budget Emergent LLM Key RICARICATO: generazione outline (Claude) e copertina (Nano Banana) ri-verificate E2E ✅
+- Serie di Libri (sequel): pulsante "Scrivi il seguito" su libri completati, prefill personaggi/impostazioni, contesto narrativo del vol. precedente iniettato in outline e capitoli, badge Vol. N in libreria — TESTATO 100% (continuità verificata con AI reale)
+- Email di benvenuto Resend (15 crediti omaggio) a ogni nuovo iscritto (email o Google) — TESTATA (trigger ok; consegna limitata dalla modalità test Resend)
 
 ## Backlog
 - P1: test E2E delle feature non-AI (EPUB export, Pro Reader, Dashboard stats) — codice scritto, verifica pendente

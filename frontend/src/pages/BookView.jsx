@@ -285,6 +285,7 @@ export default function BookView() {
           onDownload={downloadPdf}
           onDownloadEpub={downloadEpub}
           onShare={() => setShareOpen(true)}
+          onSequel={() => navigate(`/crea?sequel=${book.id}`)}
         />
 
         <Tabs defaultValue="lettura">

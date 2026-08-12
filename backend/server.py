@@ -257,6 +257,7 @@ class BookCreate(BaseModel):
     lunghezza: Optional[str] = "media"
     pov: Optional[str] = "terza"
     characters: List[Character] = []
+    parent_book_id: Optional[str] = None
 
 
 class CharacterInput(BaseModel):
@@ -441,6 +442,8 @@ async def process_session(request: Request, response: Response):
             "credits": WELCOME_CREDITS,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+        origin = request.headers.get("Origin", "")
+        asyncio.create_task(_send_welcome_safe(email, data.get("name", ""), f"{origin}/crea"))
 
     session_token = data["session_token"]
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
@@ -501,7 +504,7 @@ class ResetPasswordRequest(BaseModel):
 
 
 @api_router.post("/auth/register")
-async def register(payload: RegisterRequest, response: Response):
+async def register(payload: RegisterRequest, request: Request, response: Response):
     email = payload.email.strip().lower()
     name = payload.name.strip()
     if "@" not in email or "." not in email.split("@")[-1]:
@@ -530,6 +533,8 @@ async def register(payload: RegisterRequest, response: Response):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     set_auth_cookies(response, user_id)
+    origin = request.headers.get("Origin", "")
+    asyncio.create_task(_send_welcome_safe(email, name, f"{origin}/crea"))
     user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     return User(**user_doc)
 
@@ -577,6 +582,58 @@ async def refresh_token(request: Request, response: Response):
         httponly=True, secure=True, samesite="none", max_age=900, path="/",
     )
     return {"ok": True}
+
+
+WELCOME_EMAIL_HTML = """
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#FDFBF7;padding:40px 0;font-family:Georgia,'Times New Roman',serif;">
+  <tr><td align="center">
+    <table width="520" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #E7E5E4;border-radius:4px;">
+      <tr><td style="background-color:#722F37;padding:28px 40px;">
+        <span style="color:#ffffff;font-size:24px;letter-spacing:-0.5px;">Libroteca</span>
+      </td></tr>
+      <tr><td style="padding:36px 40px;">
+        <p style="color:#722F37;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:Arial,sans-serif;font-weight:bold;margin:0 0 12px;">Benvenuto nella tua casa editrice</p>
+        <h1 style="color:#1C1917;font-size:26px;margin:0 0 16px;font-weight:normal;">Ciao {name},</h1>
+        <p style="color:#57534E;font-size:15px;line-height:1.7;margin:0 0 20px;font-family:Arial,sans-serif;">
+          Il tuo account Libroteca è pronto. Da una semplice idea, l'AI costruisce la trama,
+          scrive i capitoli in italiano, dà vita ai personaggi e disegna la copertina.
+        </p>
+        <table cellpadding="0" cellspacing="0" width="100%" style="background-color:#F5F3EC;border-radius:4px;margin:0 0 28px;">
+          <tr><td style="padding:20px 24px;">
+            <p style="color:#722F37;font-size:28px;margin:0;font-weight:bold;">15 crediti omaggio</p>
+            <p style="color:#57534E;font-size:13px;margin:6px 0 0;font-family:Arial,sans-serif;">già sul tuo account, per scrivere il tuo primo libro.</p>
+          </td></tr>
+        </table>
+        <table cellpadding="0" cellspacing="0"><tr><td style="background-color:#722F37;border-radius:2px;">
+          <a href="{app_link}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-size:14px;font-family:Arial,sans-serif;font-weight:bold;">Scrivi il tuo primo libro</a>
+        </td></tr></table>
+      </td></tr>
+      <tr><td style="border-top:1px solid #E7E5E4;padding:20px 40px;">
+        <p style="color:#A8A29E;font-size:11px;margin:0;font-family:Arial,sans-serif;">Libroteca — La tua casa editrice personale, potenziata dall'AI.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+"""
+
+
+async def send_welcome_email(to_email: str, name: str, app_link: str):
+    resend.api_key = os.environ["RESEND_API_KEY"]
+    params = {
+        "from": f"Libroteca <{os.environ['SENDER_EMAIL']}>",
+        "to": [to_email],
+        "subject": "Benvenuto in Libroteca — 15 crediti omaggio ti aspettano",
+        "html": WELCOME_EMAIL_HTML.replace("{name}", name or "").replace("{app_link}", app_link or ""),
+    }
+    return await asyncio.to_thread(resend.Emails.send, params)
+
+
+async def _send_welcome_safe(to_email: str, name: str, app_link: str):
+    try:
+        await send_welcome_email(to_email, name, app_link)
+        logger.info(f"Email di benvenuto inviata a {to_email}")
+    except Exception as e:
+        logger.error(f"Invio email di benvenuto fallito per {to_email}: {e}")
 
 
 RESET_EMAIL_HTML = """
@@ -734,6 +791,8 @@ def _book_summary(doc: dict) -> dict:
         "cover_image": doc.get("cover_image", ""),
         "cover_model": doc.get("cover_model", ""),
         "num_capitoli": len(doc.get("capitoli", [])),
+        "serie_volume": doc.get("serie_volume", 1),
+        "parent_titolo": doc.get("parent_titolo", ""),
         "created_at": doc.get("created_at", ""),
     }
 
@@ -751,6 +810,33 @@ async def list_books(user: User = Depends(get_current_user)):
 async def create_book(payload: BookCreate, user: User = Depends(get_current_user)):
     book_id = f"book_{uuid.uuid4().hex[:12]}"
     characters = [c.model_dump() for c in payload.characters]
+
+    serie_fields = {}
+    if payload.parent_book_id:
+        parent = await db.books.find_one(
+            {"id": payload.parent_book_id, "user_id": user.user_id}, {"_id": 0}
+        )
+        if not parent:
+            raise HTTPException(status_code=404, detail="Libro precedente non trovato")
+        if not characters:
+            characters = parent.get("characters", [])
+        outline_prev = "\n".join(
+            f"{i + 1}. {c.get('titolo', '')} — {c.get('sommario', '')}"
+            for i, c in enumerate(parent.get("capitoli", []))
+        )
+        contesto = (
+            f"TITOLO DEL VOLUME PRECEDENTE: {parent.get('titolo', '')}\n"
+            f"SINOSSI DEL VOLUME PRECEDENTE: {parent.get('sinossi', '')}\n"
+            f"RIASSUNTO DEGLI EVENTI DEL VOLUME PRECEDENTE: {parent.get('riassunto', '') or '(non disponibile)'}\n"
+            f"STRUTTURA DEI CAPITOLI DEL VOLUME PRECEDENTE:\n{outline_prev}"
+        )
+        serie_fields = {
+            "parent_book_id": parent["id"],
+            "parent_titolo": parent.get("titolo", ""),
+            "serie_volume": int(parent.get("serie_volume") or 1) + 1,
+            "contesto_serie": contesto,
+        }
+
     doc = {
         "id": book_id,
         "user_id": user.user_id,
@@ -770,6 +856,7 @@ async def create_book(payload: BookCreate, user: User = Depends(get_current_user
         "cover_model": "",
         "status": "bozza",
         "created_at": datetime.now(timezone.utc).isoformat(),
+        **serie_fields,
     }
     await db.books.insert_one(doc)
     doc.pop("_id", None)
@@ -864,6 +951,8 @@ async def generate_outline_ep(book_id: str, user: User = Depends(get_current_use
             characters=doc.get("characters", []),
             tono=doc.get("tono", ""),
             pov=doc.get("pov", ""),
+            serie_context=doc.get("contesto_serie", ""),
+            serie_volume=doc.get("serie_volume", 1),
         )
     except Exception as e:
         logger.error(f"Generazione outline fallita: {e}")

@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Feather, Plus, UserPlus, Trash2, Wand2, ArrowLeft } from "lucide-react";
+import { Feather, Plus, UserPlus, Trash2, Wand2, ArrowLeft, BookPlus, X } from "lucide-react";
 import Header from "@/components/Header";
 import CharacterDialog from "@/components/CharacterDialog";
 import api from "@/lib/api";
@@ -22,6 +22,9 @@ import { Progress } from "@/components/ui/progress";
 export default function CreateBook() {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sequelId = searchParams.get("sequel");
+  const [parentBook, setParentBook] = useState(null);
   const [idea, setIdea] = useState("");
   const [genere, setGenere] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-5-20250929");
@@ -34,6 +37,37 @@ export default function CreateBook() {
   const [editIndex, setEditIndex] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
+
+  useEffect(() => {
+    if (!sequelId) {
+      setParentBook(null);
+      return;
+    }
+    api
+      .get(`/books/${sequelId}`)
+      .then((res) => {
+        const p = res.data;
+        setParentBook(p);
+        setGenere(p.genere || "");
+        if (p.model) setModel(p.model);
+        if (p.tono) setTono(p.tono);
+        if (p.lunghezza) setLunghezza(p.lunghezza);
+        if (p.pov) setPov(p.pov);
+        setCharacters(
+          (p.characters || []).map(({ id, immagine, ...rest }) => rest)
+        );
+      })
+      .catch(() => {
+        toast.error("Libro precedente non trovato");
+        setSearchParams({});
+      });
+  }, [sequelId, setSearchParams]);
+
+  const removeSequel = () => {
+    setParentBook(null);
+    setCharacters([]);
+    setSearchParams({});
+  };
 
   const addCharacter = (char) => {
     if (editIndex !== null) {
@@ -70,6 +104,7 @@ export default function CreateBook() {
         lunghezza,
         pov,
         characters,
+        parent_book_id: parentBook ? parentBook.id : null,
       });
       const bookId = create.data.id;
 
@@ -133,22 +168,54 @@ export default function CreateBook() {
         </button>
 
         <p className="text-xs font-sans uppercase tracking-[0.2em] text-[#722F37] font-semibold mb-3">
-          Nuova opera
+          {parentBook ? `Nuovo volume · Vol. ${(parentBook.serie_volume || 1) + 1}` : "Nuova opera"}
         </p>
         <h1 className="font-serif text-4xl lg:text-5xl tracking-tight text-[#1C1917] mb-10">
-          Qual è la tua <span className="italic text-[#722F37]">idea</span>?
+          {parentBook ? (
+            <>Come <span className="italic text-[#722F37]">continua</span> la storia?</>
+          ) : (
+            <>Qual è la tua <span className="italic text-[#722F37]">idea</span>?</>
+          )}
         </h1>
+
+        {parentBook && (
+          <div
+            data-testid="sequel-banner"
+            className="flex items-center gap-4 bg-white border border-[#E7E5E4] rounded-sm p-4 mb-10"
+          >
+            <BookPlus className="w-5 h-5 text-[#722F37] shrink-0" strokeWidth={1.5} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs uppercase tracking-[0.15em] text-[#722F37] font-semibold">Seguito di</p>
+              <p className="font-serif text-lg text-[#1C1917] truncate">«{parentBook.titolo}»</p>
+              <p className="text-xs text-[#57534E] mt-0.5">
+                L&apos;AI ricorderà trama e personaggi del volume precedente per garantire continuità.
+              </p>
+            </div>
+            <button
+              onClick={removeSequel}
+              data-testid="remove-sequel-btn"
+              title="Rimuovi collegamento alla serie"
+              className="text-[#57534E] hover:text-[#722F37] transition-colors shrink-0"
+            >
+              <X className="w-4 h-4" strokeWidth={1.5} />
+            </button>
+          </div>
+        )}
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-12">
           <div>
             <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
-              L&apos;idea del libro
+              {parentBook ? "L'idea del nuovo volume" : "L'idea del libro"}
             </Label>
             <Textarea
               data-testid="idea-input"
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
-              placeholder="Es. Un'archeologa scopre una città sommersa che esiste solo nei sogni delle persone..."
+              placeholder={
+                parentBook
+                  ? "Es. Anni dopo gli eventi del primo volume, una nuova minaccia costringe i protagonisti a..."
+                  : "Es. Un'archeologa scopre una città sommersa che esiste solo nei sogni delle persone..."
+              }
               rows={4}
               className={`${field} text-lg mt-2 leading-relaxed`}
             />

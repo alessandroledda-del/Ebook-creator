@@ -241,7 +241,8 @@ Regole:
 
 
 async def generate_outline(idea: str, genere: str, model: str, num_capitoli: int,
-                           characters: list, tono: str = "", pov: str = "") -> dict:
+                           characters: list, tono: str = "", pov: str = "",
+                           serie_context: str = "", serie_volume: int = 1) -> dict:
     """Generate only the book skeleton: title, synopsis, characters and a
     chapter outline (titles + short summaries). Fast, enables progress UI."""
     model = model if model in TEXT_MODELS else "claude-sonnet-4-5-20250929"
@@ -252,13 +253,25 @@ async def generate_outline(idea: str, genere: str, model: str, num_capitoli: int
         "Sei un pluripremiato romanziere italiano. Pianifichi libri con cura. "
         "Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza markdown."
     )
+    serie_txt = ""
+    if serie_context:
+        serie_txt = f"""
+QUESTO LIBRO È IL VOLUME {serie_volume} DI UNA SERIE: IL SEGUITO DIRETTO DEL VOLUME PRECEDENTE.
+{serie_context}
+
+REGOLE PER IL SEGUITO (obbligatorie):
+- La trama riparte dagli eventi del volume precedente e li sviluppa: niente reboot, niente contraddizioni.
+- Mantieni coerenti i personaggi già esistenti (nomi, caratteristiche, relazioni) e falli evolvere; puoi introdurne di nuovi.
+- Dai per acquisiti gli eventi del volume precedente: richiamali brevemente solo dove serve.
+- Il titolo deve suggerire la continuità della serie senza copiare il titolo precedente.
+"""
     prompt = f"""Progetta la struttura di un libro a partire da questa idea.
 
 IDEA: {idea}
 GENERE PREFERITO: {genere or "a tua scelta, coerente con l'idea"}
 NUMERO DI CAPITOLI: {num_capitoli}
 {_style_directives(tono, pov)}
-
+{serie_txt}
 PERSONAGGI FORNITI DALL'UTENTE (da integrare e arricchire):
 {_characters_block(characters)}
 
@@ -336,6 +349,13 @@ async def generate_chapter(book: dict, index: int, instruction: str = "") -> str
         else ""
     )
 
+    serie_ctx = book.get("contesto_serie", "")
+    serie_txt = (
+        f"\nQUESTO LIBRO È IL SEGUITO DI UN VOLUME PRECEDENTE. FATTI ACQUISITI (non contraddirli, non riassumerli):\n{serie_ctx[:2000]}\n"
+        if serie_ctx
+        else ""
+    )
+
     existing_txt = ""
     if instruction and current.get("contenuto"):
         existing_txt = (
@@ -358,7 +378,7 @@ async def generate_chapter(book: dict, index: int, instruction: str = "") -> str
 
 SINOSSI: {book.get('sinossi', '')}
 {_style_directives(tono, pov)}
-{summary_txt}
+{serie_txt}{summary_txt}
 PERSONAGGI:
 {chars_txt}
 

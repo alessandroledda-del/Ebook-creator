@@ -29,6 +29,15 @@ export const BookCard = ({ book, index, onOpen, onDelete }) => (
           >
             {book.status === "completato" ? "Completato" : "Bozza"}
           </Badge>
+          {(book.serie_volume || 1) > 1 && (
+            <Badge
+              variant="outline"
+              className="text-[10px] uppercase tracking-wider border-[#722F37] text-[#722F37]"
+              data-testid="serie-volume-badge"
+            >
+              Vol. {book.serie_volume}
+            </Badge>
+          )}
           {book.genere && <span className="text-xs text-[#57534E]">{book.genere}</span>}
         </div>
         <h3 className="font-serif text-xl tracking-tight text-[#1C1917] line-clamp-2">

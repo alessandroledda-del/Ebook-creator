@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="1.234" timestamp="2026-08-12T10:16:02.586947+00:00" hostname="agent-env-3978e7c0-d4db-485c-bc84-194becbbce8e"><testcase classname="backend.tests.test_series_and_welcome.TestSeriesSequel" name="test_list_books_exposes_serie_fields" time="0.557" /><testcase classname="backend.tests.test_series_and_welcome.TestSeriesSequel" name="test_create_book_with_invalid_parent_returns_404" time="0.043" /><testcase classname="backend.tests.test_series_and_welcome.TestSeriesSequel" name="test_create_book_with_valid_parent_inherits_context" time="0.232" /><testcase classname="backend.tests.test_series_and_welcome.TestWelcomeEmail" name="test_register_triggers_welcome_email_log" time="0.320"><failure message="AssertionError: assert 'test_welcome...@libroteca.ai' == 'TEST_welcome...@libroteca.ai'&#10;  &#10;  - TEST_welcome_20faec65@libroteca.ai&#10;  ? ^^^^&#10;  + test_welcome_20faec65@libroteca.ai&#10;  ? ^^^^">backend/tests/test_series_and_welcome.py:137: in test_register_triggers_welcome_email_log
+    assert user["email"] == email
+E   AssertionError: assert 'test_welcome...@libroteca.ai' == 'TEST_welcome...@libroteca.ai'
+E     
+E     - TEST_welcome_20faec65@libroteca.ai
+E     ? ^^^^
+E     + test_welcome_20faec65@libroteca.ai
+E     ? ^^^^</failure></testcase></testsuite></testsuites>
