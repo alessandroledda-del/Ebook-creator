@@ -27,6 +27,29 @@ export default function Dashboard() {
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("tutti");
   const [sort, setSort] = useState("recenti");
+  const [exporting, setExporting] = useState(null);
+
+  const exportSeries = async (rootId, format, title) => {
+    const key = `${rootId}-${format}`;
+    setExporting(key);
+    try {
+      const path = format === "epub" ? `/series/${rootId}/export/epub` : `/series/${rootId}/export`;
+      const res = await api.get(path, { responseType: "blob" });
+      const mime = format === "epub" ? "application/epub+zip" : "application/pdf";
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: mime }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Saga_${(title || "serie").replace(/\s+/g, "_")}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Export della saga non riuscito");
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -196,7 +219,12 @@ export default function Dashboard() {
 
         {/* Series shelves */}
         {!loading && series.length > 0 && !query.trim() && genre === "tutti" && (
-          <SeriesShelf series={series} onOpen={(id) => navigate(`/book/${id}`)} />
+          <SeriesShelf
+            series={series}
+            onOpen={(id) => navigate(`/book/${id}`)}
+            onExport={exportSeries}
+            exporting={exporting}
+          />
         )}
 
         {loading ? (

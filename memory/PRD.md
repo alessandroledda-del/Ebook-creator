@@ -40,10 +40,11 @@
 - Email di benvenuto Resend (15 crediti omaggio) a ogni nuovo iscritto (email o Google) — TESTATA (trigger ok; consegna limitata dalla modalità test Resend)
 - Scaffale Serie in dashboard: volumi raggruppati per saga in ordine (serie_root_id, backfill dati esistenti) — TESTATO 100%
 - Copertine Coordinate: toggle sui sequel per usare la copertina del vol. precedente come riferimento di stile (Nano Banana editing) — TESTATO E2E (coerenza visiva confermata)
+- Export Saga: download di un'intera serie in un unico PDF o EPUB con volumi in ordine (GET /api/series/{root_id}/export[/epub], pulsanti sullo scaffale serie) — TESTATO (curl + UI)
 
 ## Backlog
 - P1: test E2E delle feature non-AI (EPUB export, Pro Reader, Dashboard stats) — codice scritto, verifica pendente
-- P2: verificare un dominio su resend.com/domains per inviare email di reset a qualsiasi destinatario (ora solo all'owner Resend)
+- P2: verificare un dominio su resend.com/domains per inviare email di reset a qualsiasi destinatario (ora solo all'owner Resend) — UTENTE HA SCELTO DI RIMANDARE (2026-06-12): quando avrà un dominio verificato basterà aggiornare SENDER_EMAIL in backend/.env
 - P2: usare APP_URL fisso invece dell'header Origin per il link di reset (hardening anti-phishing)
 - P2: rigenerazione copertina con immagine di riferimento — FATTO (Nano Banana editing)
 - P2: condivisione pubblica read-only — FATTO (`/p/{public_id}`)

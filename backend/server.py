@@ -174,6 +174,155 @@ def build_book_epub(doc: dict) -> bytes:
 
 
 
+def build_series_pdf(volumes: list) -> bytes:
+    """Render an ordered list of book documents (a saga) to a single PDF."""
+    buf = io.BytesIO()
+    saga_title = f"Saga di {volumes[0].get('titolo', 'Senza titolo')}"
+    pdf = SimpleDocTemplate(
+        buf, pagesize=A5,
+        leftMargin=20 * mm, rightMargin=20 * mm,
+        topMargin=22 * mm, bottomMargin=20 * mm,
+        title=saga_title,
+    )
+    base = getSampleStyleSheet()
+    wine = HexColor("#722F37")
+    ink = HexColor("#1C1917")
+
+    title_style = ParagraphStyle(
+        "BookTitle", parent=base["Title"], fontName="Times-Bold",
+        fontSize=30, leading=34, textColor=ink, alignment=TA_CENTER, spaceAfter=10,
+    )
+    subtitle_style = ParagraphStyle(
+        "BookSub", parent=base["Normal"], fontName="Times-Italic",
+        fontSize=14, leading=18, textColor=wine, alignment=TA_CENTER, spaceAfter=24,
+    )
+    overline = ParagraphStyle(
+        "Overline", parent=base["Normal"], fontName="Helvetica-Bold",
+        fontSize=9, textColor=wine, alignment=TA_CENTER, spaceAfter=8,
+    )
+    synopsis_style = ParagraphStyle(
+        "Synopsis", parent=base["Normal"], fontName="Times-Italic",
+        fontSize=11, leading=17, textColor=ink, alignment=TA_CENTER,
+    )
+    chapter_over = ParagraphStyle(
+        "ChapOver", parent=base["Normal"], fontName="Helvetica-Bold",
+        fontSize=9, textColor=wine, spaceAfter=4,
+    )
+    chapter_title = ParagraphStyle(
+        "ChapTitle", parent=base["Heading1"], fontName="Times-Bold",
+        fontSize=20, leading=24, textColor=ink, spaceAfter=18,
+    )
+    body_style = ParagraphStyle(
+        "Body", parent=base["Normal"], fontName="Times-Roman",
+        fontSize=11.5, leading=18, textColor=ink, alignment=TA_JUSTIFY, spaceAfter=10,
+    )
+
+    story = []
+    # Saga title page
+    story.append(Spacer(1, 55 * mm))
+    story.append(Paragraph("LA SAGA COMPLETA", overline))
+    story.append(Paragraph(volumes[0].get("titolo", "Senza titolo"), title_style))
+    story.append(Paragraph(f"{len(volumes)} volumi", subtitle_style))
+    story.append(PageBreak())
+
+    for doc in volumes:
+        story.append(Spacer(1, 50 * mm))
+        story.append(Paragraph(f"VOLUME {doc.get('serie_volume', 1)} · {(doc.get('genere') or 'Narrativa').upper()}", overline))
+        story.append(Paragraph(doc.get("titolo", "Senza titolo"), title_style))
+        if doc.get("sottotitolo"):
+            story.append(Paragraph(doc["sottotitolo"], subtitle_style))
+        if doc.get("sinossi"):
+            story.append(Spacer(1, 8 * mm))
+            story.append(Paragraph(doc["sinossi"], synopsis_style))
+        story.append(PageBreak())
+
+        for i, ch in enumerate(doc.get("capitoli", [])):
+            story.append(Paragraph(f"VOLUME {doc.get('serie_volume', 1)} — CAPITOLO {i + 1}", chapter_over))
+            story.append(Paragraph(ch.get("titolo", ""), chapter_title))
+            for para in (ch.get("contenuto", "") or "").split("\n"):
+                para = para.strip()
+                if para:
+                    story.append(Paragraph(para, body_style))
+            story.append(PageBreak())
+
+    pdf.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
+def build_series_epub(volumes: list) -> bytes:
+    """Render an ordered list of book documents (a saga) to a single EPUB."""
+    book = epub.EpubBook()
+    root = volumes[0]
+    saga_title = f"Saga di {root.get('titolo', 'Senza titolo')}"
+    book.set_identifier(f"saga-{root.get('id', 'libroteca')}")
+    book.set_title(saga_title)
+    book.set_language("it")
+    book.add_author("Libroteca AI")
+
+    css = epub.EpubItem(
+        uid="style", file_name="style/main.css",
+        media_type="text/css", content=EPUB_CSS.encode("utf-8"),
+    )
+    book.add_item(css)
+
+    saga_page = epub.EpubHtml(title=saga_title, file_name="saga.xhtml", lang="it")
+    saga_page.content = (
+        f"<html><head></head><body class='title-page'>"
+        f"<p class='overline'>LA SAGA COMPLETA</p>"
+        f"<h1>{escape(root.get('titolo', 'Senza titolo'))}</h1>"
+        f"<p class='synopsis'>{len(volumes)} volumi</p></body></html>"
+    )
+    saga_page.add_item(css)
+    book.add_item(saga_page)
+
+    toc, spine = [], ["nav", saga_page]
+    for doc in volumes:
+        vol = doc.get("serie_volume", 1)
+        titolo = doc.get("titolo", "Senza titolo")
+        sub = f"<p class='synopsis'>{escape(doc.get('sottotitolo') or '')}</p>" if doc.get("sottotitolo") else ""
+        syn = f"<p class='synopsis'>{escape(doc.get('sinossi') or '')}</p>" if doc.get("sinossi") else ""
+        vol_page = epub.EpubHtml(title=f"Vol. {vol} — {titolo}", file_name=f"vol_{vol}.xhtml", lang="it")
+        vol_page.content = (
+            f"<html><head></head><body class='title-page'>"
+            f"<p class='overline'>VOLUME {vol} · {escape((doc.get('genere') or 'Narrativa').upper())}</p>"
+            f"<h1>{escape(titolo)}</h1>{sub}{syn}</body></html>"
+        )
+        vol_page.add_item(css)
+        book.add_item(vol_page)
+        spine.append(vol_page)
+
+        vol_chapters = []
+        for i, ch in enumerate(doc.get("capitoli", [])):
+            c = epub.EpubHtml(
+                title=ch.get("titolo", ""), file_name=f"vol_{vol}_chap_{i + 1}.xhtml", lang="it"
+            )
+            paras = "".join(
+                f"<p>{escape(p.strip())}</p>"
+                for p in (ch.get("contenuto", "") or "").split("\n") if p.strip()
+            )
+            c.content = (
+                f"<html><head></head><body>"
+                f"<p class='overline'>VOLUME {vol} — CAPITOLO {i + 1}</p>"
+                f"<h2>{escape(ch.get('titolo', ''))}</h2>{paras}</body></html>"
+            )
+            c.add_item(css)
+            book.add_item(c)
+            vol_chapters.append(c)
+            spine.append(c)
+        toc.append((epub.Section(f"Vol. {vol} — {titolo}", href=f"vol_{vol}.xhtml"), tuple(vol_chapters)))
+
+    book.toc = tuple(toc)
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    book.spine = spine
+
+    out = io.BytesIO()
+    epub.write_epub(out, book)
+    out.seek(0)
+    return out.read()
+
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
@@ -1121,6 +1270,41 @@ async def export_book_epub(book_id: str, user: User = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Libro non trovato")
     epub_bytes = build_book_epub(doc)
     filename = (doc.get("titolo") or "libro").replace(" ", "_")[:40]
+    return StreamingResponse(
+        iter([epub_bytes]),
+        media_type="application/epub+zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.epub"'},
+    )
+
+
+async def _get_series_volumes(root_id: str, user: User) -> list:
+    docs = await db.books.find(
+        {"user_id": user.user_id, "$or": [{"id": root_id}, {"serie_root_id": root_id}]},
+        {"_id": 0},
+    ).to_list(50)
+    if len(docs) < 2:
+        raise HTTPException(status_code=404, detail="Serie non trovata")
+    docs.sort(key=lambda d: d.get("serie_volume") or 1)
+    return docs
+
+
+@api_router.get("/series/{root_id}/export")
+async def export_series_pdf(root_id: str, user: User = Depends(get_current_user)):
+    volumes = await _get_series_volumes(root_id, user)
+    pdf_bytes = build_series_pdf(volumes)
+    filename = f"Saga_{(volumes[0].get('titolo') or 'serie').replace(' ', '_')[:40]}"
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'},
+    )
+
+
+@api_router.get("/series/{root_id}/export/epub")
+async def export_series_epub(root_id: str, user: User = Depends(get_current_user)):
+    volumes = await _get_series_volumes(root_id, user)
+    epub_bytes = build_series_epub(volumes)
+    filename = f"Saga_{(volumes[0].get('titolo') or 'serie').replace(' ', '_')[:40]}"
     return StreamingResponse(
         iter([epub_bytes]),
         media_type="application/epub+zip",
