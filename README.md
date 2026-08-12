@@ -1,5 +1,10 @@
 # 📖 Libroteca — AI-Powered Book Creator
 
+[![GitHub stars](https://img.shields.io/github/stars/alessandroledda-del/Ebook-creator?style=social)](https://github.com/alessandroledda-del/Ebook-creator/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Node.js 18+](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
+
 Trasforma le tue idee in libri completi con l'intelligenza artificiale. **Libroteca** è una piattaforma full-stack che genera automaticamente trame, capitoli, personaggi e copertine in italiano, usando i migliori LLM disponibili.
 
 ![JavaScript](https://img.shields.io/badge/JavaScript-68.6%25-F7DF1E?style=flat-square)
@@ -166,6 +171,31 @@ npm test
 cd backend
 pytest tests/
 ```
+
+---
+
+## 📦 Publishing (NPM & PyPI)
+
+### Publicare il Backend su PyPI
+
+```bash
+cd backend
+pip install build twine
+
+# Configura setup.py e pyproject.toml
+python -m build
+twine upload dist/*
+```
+
+### Pubblicare il Frontend su NPM
+
+```bash
+cd frontend
+npm version patch
+npm publish
+```
+
+Vedi [PUBLISHING.md](./PUBLISHING.md) per istruzioni dettagliate.
 
 ---
 
