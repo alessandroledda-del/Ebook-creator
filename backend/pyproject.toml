@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "libroteca-api"
+version = "0.1.0"
+description = "FastAPI backend for Libroteca - AI-powered book creator"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Alessandro Ledda", email = "alessandro.ledda@tempocasa.com"}
+]
+keywords = [
+    "ai",
+    "book-generator",
+    "fastapi",
+    "openai",
+    "anthropic",
+    "generative-ai",
+    "writing",
+    "narrative"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Italian",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Office/Business",
+    "Topic :: Multimedia :: Graphics :: Presentation",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/alessandroledda-del/Ebook-creator"
+Documentation = "https://github.com/alessandroledda-del/Ebook-creator#readme"
+Repository = "https://github.com/alessandroledda-del/Ebook-creator.git"
+Issues = "https://github.com/alessandroledda-del/Ebook-creator/issues"
