@@ -30,7 +30,7 @@ const FEATURES = [
 ];
 
 export default function Landing() {
-  const { user, loading, login } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function Landing() {
           <span className="font-serif text-2xl tracking-tight">Libroteca</span>
         </div>
         <button
-          onClick={login}
+          onClick={() => navigate("/login")}
           data-testid="header-login-btn"
           className="bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-5 py-2.5 text-sm font-medium transition-colors duration-300"
         >
@@ -87,14 +87,14 @@ export default function Landing() {
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-5">
               <button
-                onClick={login}
+                onClick={() => navigate("/login")}
                 data-testid="hero-start-btn"
                 className="group inline-flex items-center gap-2 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-8 py-4 font-medium transition-all duration-300 hover:-translate-y-0.5"
               >
                 Inizia a scrivere
                 <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={1.5} />
               </button>
-              <span className="text-sm text-[#57534E]">Accesso con Google · 15 crediti omaggio</span>
+              <span className="text-sm text-[#57534E]">Email o Google · 15 crediti omaggio</span>
             </div>
           </motion.div>
 
@@ -222,7 +222,7 @@ export default function Landing() {
             Crea il tuo account e ricevi 15 crediti omaggio per dare vita al primo libro.
           </p>
           <button
-            onClick={login}
+            onClick={() => navigate("/login")}
             data-testid="cta-start-btn"
             className="group inline-flex items-center gap-2 mt-10 bg-[#FDFBF7] text-[#722F37] hover:bg-white rounded-sm px-8 py-4 font-medium transition-all duration-300 hover:-translate-y-0.5"
           >

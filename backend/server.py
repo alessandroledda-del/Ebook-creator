@@ -13,6 +13,9 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 import httpx
+import bcrypt
+import jwt
+import secrets
 
 import ai_service
 from emergentintegrations.payments.stripe.checkout import (
@@ -270,15 +273,119 @@ class CoverRequest(BaseModel):
 
 
 # ---------------------- Auth helpers ----------------------
+JWT_ALGORITHM = "HS256"
+
+
+def _jwt_secret() -> str:
+    return os.environ["JWT_SECRET"]
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def create_access_token(user_id: str) -> str:
+    payload = {
+        "sub": user_id,
+        "type": "access",
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
+    }
+    return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def create_refresh_token(user_id: str) -> str:
+    payload = {
+        "sub": user_id,
+        "type": "refresh",
+        "exp": datetime.now(timezone.utc) + timedelta(days=7),
+    }
+    return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def set_auth_cookies(response: Response, user_id: str):
+    response.set_cookie(
+        key="access_token", value=create_access_token(user_id),
+        httponly=True, secure=True, samesite="none", max_age=900, path="/",
+    )
+    response.set_cookie(
+        key="refresh_token", value=create_refresh_token(user_id),
+        httponly=True, secure=True, samesite="none", max_age=604800, path="/",
+    )
+
+
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
+
+
+async def check_lockout(identifier: str):
+    rec = await db.login_attempts.find_one({"identifier": identifier})
+    if not rec:
+        return
+    locked_until = rec.get("locked_until")
+    if locked_until:
+        if isinstance(locked_until, str):
+            locked_until = datetime.fromisoformat(locked_until)
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+        if locked_until > datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=429,
+                detail="Troppi tentativi falliti. Riprova tra qualche minuto.",
+            )
+        await db.login_attempts.delete_one({"identifier": identifier})
+
+
+async def record_failed_login(identifier: str):
+    rec = await db.login_attempts.find_one_and_update(
+        {"identifier": identifier},
+        {"$inc": {"count": 1}},
+        upsert=True, return_document=True,
+    )
+    if rec and rec.get("count", 0) >= MAX_LOGIN_ATTEMPTS:
+        locked = datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_MINUTES)
+        await db.login_attempts.update_one(
+            {"identifier": identifier},
+            {"$set": {"locked_until": locked.isoformat(), "count": 0}},
+        )
+
+
+def _client_identifier(request: Request, email: str) -> str:
+    fwd = request.headers.get("X-Forwarded-For", "")
+    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
+    return f"{ip}:{email}"
+
+
 async def get_current_user(
     request: Request,
     session_token: Optional[str] = Cookie(default=None),
 ) -> User:
-    token = session_token
-    if not token:
-        auth = request.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            token = auth[7:]
+    bearer = None
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        bearer = auth[7:]
+
+    # 1) JWT (email/password login)
+    for tok in (request.cookies.get("access_token"), bearer):
+        if not tok:
+            continue
+        try:
+            payload = jwt.decode(tok, _jwt_secret(), algorithms=[JWT_ALGORITHM])
+            if payload.get("type") == "access":
+                user_doc = await db.users.find_one({"user_id": payload["sub"]}, {"_id": 0})
+                if user_doc:
+                    return User(**user_doc)
+        except jwt.PyJWTError:
+            pass
+
+    # 2) Emergent Google session
+    token = session_token or bearer
     if not token:
         raise HTTPException(status_code=401, detail="Non autenticato")
 
@@ -365,7 +472,146 @@ async def logout(response: Response, session_token: Optional[str] = Cookie(defau
     if session_token:
         await db.user_sessions.delete_one({"session_token": session_token})
     response.delete_cookie("session_token", path="/")
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
     return {"ok": True}
+
+
+# ---------------------- Email/Password auth ----------------------
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+@api_router.post("/auth/register")
+async def register(payload: RegisterRequest, response: Response):
+    email = payload.email.strip().lower()
+    name = payload.name.strip()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Email non valida")
+    if not name:
+        raise HTTPException(status_code=400, detail="Il nome è obbligatorio")
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 6 caratteri")
+
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Esiste già un account con questa email. Accedi oppure usa Google.",
+        )
+
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    await db.users.insert_one({
+        "user_id": user_id,
+        "email": email,
+        "name": name,
+        "picture": "",
+        "auth_provider": "email",
+        "password_hash": hash_password(payload.password),
+        "credits": WELCOME_CREDITS,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    set_auth_cookies(response, user_id)
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return User(**user_doc)
+
+
+@api_router.post("/auth/login")
+async def login(payload: LoginRequest, request: Request, response: Response):
+    email = payload.email.strip().lower()
+    identifier = _client_identifier(request, email)
+    await check_lockout(identifier)
+
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user_doc:
+        await record_failed_login(identifier)
+        raise HTTPException(status_code=401, detail="Email o password non validi")
+    if not user_doc.get("password_hash"):
+        raise HTTPException(
+            status_code=400,
+            detail="Questo account usa l'accesso con Google. Usa il pulsante Google per entrare.",
+        )
+    if not verify_password(payload.password, user_doc["password_hash"]):
+        await record_failed_login(identifier)
+        raise HTTPException(status_code=401, detail="Email o password non validi")
+
+    await db.login_attempts.delete_one({"identifier": identifier})
+    set_auth_cookies(response, user_doc["user_id"])
+    return User(**user_doc)
+
+
+@api_router.post("/auth/refresh")
+async def refresh_token(request: Request, response: Response):
+    token = request.cookies.get("refresh_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Refresh token mancante")
+    try:
+        payload = jwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Refresh token non valido")
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Tipo di token non valido")
+    user_doc = await db.users.find_one({"user_id": payload["sub"]}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Utente non trovato")
+    response.set_cookie(
+        key="access_token", value=create_access_token(user_doc["user_id"]),
+        httponly=True, secure=True, samesite="none", max_age=900, path="/",
+    )
+    return {"ok": True}
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, request: Request):
+    email = payload.email.strip().lower()
+    user_doc = await db.users.find_one({"email": email, "password_hash": {"$exists": True}}, {"_id": 0})
+    if user_doc:
+        token = secrets.token_urlsafe(32)
+        await db.password_reset_tokens.insert_one({
+            "token": token,
+            "user_id": user_doc["user_id"],
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+            "used": False,
+        })
+        origin = request.headers.get("Origin", "")
+        logger.info(f"[RESET PASSWORD] Link per {email}: {origin}/reset-password?token={token}")
+    return {"message": "Se l'email è registrata, riceverai un link per reimpostare la password."}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(payload: ResetPasswordRequest):
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 6 caratteri")
+    rec = await db.password_reset_tokens.find_one({"token": payload.token})
+    if not rec or rec.get("used"):
+        raise HTTPException(status_code=400, detail="Link di reset non valido o già usato")
+    expires_at = rec["expires_at"]
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Link di reset scaduto")
+    await db.users.update_one(
+        {"user_id": rec["user_id"]},
+        {"$set": {"password_hash": hash_password(payload.password)}},
+    )
+    await db.password_reset_tokens.update_one({"token": payload.token}, {"$set": {"used": True}})
+    return {"message": "Password aggiornata. Ora puoi accedere."}
 
 
 # ---------------------- Book helpers ----------------------
@@ -1007,6 +1253,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_auth():
+    try:
+        await db.users.create_index("email", unique=True)
+    except Exception as e:
+        logger.warning(f"Indice email non creato: {e}")
+    await db.login_attempts.create_index("identifier")
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+
+    test_email = "test@libroteca.ai"
+    test_password = "Test1234!"
+    existing = await db.users.find_one({"email": test_email})
+    if not existing:
+        await db.users.insert_one({
+            "user_id": f"user_{uuid.uuid4().hex[:12]}",
+            "email": test_email,
+            "name": "Utente Test",
+            "picture": "",
+            "auth_provider": "email",
+            "password_hash": hash_password(test_password),
+            "credits": WELCOME_CREDITS,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    elif not verify_password(test_password, existing.get("password_hash") or ""):
+        await db.users.update_one(
+            {"email": test_email},
+            {"$set": {"password_hash": hash_password(test_password)}},
+        )
 
 
 @app.on_event("shutdown")
