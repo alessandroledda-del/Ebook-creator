@@ -41,6 +41,7 @@
 - Scaffale Serie in dashboard: volumi raggruppati per saga in ordine (serie_root_id, backfill dati esistenti) — TESTATO 100%
 - Copertine Coordinate: toggle sui sequel per usare la copertina del vol. precedente come riferimento di stile (Nano Banana editing) — TESTATO E2E (coerenza visiva confermata)
 - Export Saga: download di un'intera serie in un unico PDF o EPUB con volumi in ordine (GET /api/series/{root_id}/export[/epub], pulsanti sullo scaffale serie) — TESTATO (curl + UI)
+- Statistiche Scrittore nel profilo: parole totali, libri/capitoli/serie, generi preferiti (barre), 8 traguardi sbloccabili (GET /api/auth/stats) — TESTATO (curl + screenshot)
 
 ## Backlog
 - P1: test E2E delle feature non-AI (EPUB export, Pro Reader, Dashboard stats) — codice scritto, verifica pendente

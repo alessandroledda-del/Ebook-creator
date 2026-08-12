@@ -892,6 +892,63 @@ async def account_info(user: User = Depends(get_current_user)):
     }
 
 
+@api_router.get("/auth/stats")
+async def writer_stats(user: User = Depends(get_current_user)):
+    books = await db.books.find(
+        {"user_id": user.user_id},
+        {"_id": 0, "capitoli": 1, "genere": 1, "status": 1, "cover_image": 1,
+         "characters": 1, "serie_root_id": 1},
+    ).to_list(500)
+
+    total_words = 0
+    chapters_written = 0
+    genres = {}
+    covers = 0
+    characters = 0
+    for b in books:
+        for ch in b.get("capitoli", []):
+            content = (ch.get("contenuto") or "").strip()
+            if content:
+                chapters_written += 1
+                total_words += len(content.split())
+        g = (b.get("genere") or "").strip()
+        if g:
+            genres[g] = genres.get(g, 0) + 1
+        if b.get("cover_image"):
+            covers += 1
+        characters += len(b.get("characters", []))
+
+    completed = sum(1 for b in books if b.get("status") == "completato")
+    num_series = len({b.get("serie_root_id") for b in books if b.get("serie_root_id")})
+    top_genres = sorted(
+        [{"genere": g, "count": c} for g, c in genres.items()],
+        key=lambda x: -x["count"],
+    )[:6]
+
+    achievements = [
+        {"id": "primo_libro", "titolo": "Prima opera", "descrizione": "Crea il tuo primo libro", "achieved": len(books) >= 1},
+        {"id": "completato", "titolo": "Parola fine", "descrizione": "Completa un libro", "achieved": completed >= 1},
+        {"id": "copertina", "titolo": "Copertinista", "descrizione": "Genera una copertina AI", "achieved": covers >= 1},
+        {"id": "romanziere", "titolo": "Romanziere", "descrizione": "Scrivi 10.000 parole", "achieved": total_words >= 10000},
+        {"id": "saga", "titolo": "Maestro della saga", "descrizione": "Scrivi il seguito di un libro", "achieved": num_series >= 1},
+        {"id": "generi", "titolo": "Poliedrico", "descrizione": "Esplora 3 generi diversi", "achieved": len(genres) >= 3},
+        {"id": "biblioteca", "titolo": "Piccola biblioteca", "descrizione": "Crea 5 libri", "achieved": len(books) >= 5},
+        {"id": "prolifico", "titolo": "Penna instancabile", "descrizione": "Scrivi 50.000 parole", "achieved": total_words >= 50000},
+    ]
+
+    return {
+        "total_words": total_words,
+        "total_books": len(books),
+        "completed_books": completed,
+        "chapters_written": chapters_written,
+        "num_series": num_series,
+        "covers_generated": covers,
+        "characters_created": characters,
+        "top_genres": top_genres,
+        "achievements": achievements,
+    }
+
+
 @api_router.post("/auth/change-password")
 async def change_password(payload: ChangePasswordRequest, user: User = Depends(get_current_user)):
     if len(payload.new_password) < 6:

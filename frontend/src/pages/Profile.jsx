@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import Header from "@/components/Header";
+import { WriterStats } from "@/components/profile/WriterStats";
 
 const inputCls =
   "w-full bg-white border border-[#E7E5E4] rounded-sm px-4 py-3 text-sm text-[#1C1917] placeholder:text-[#A8A29E] focus:outline-none focus:border-[#722F37] transition-colors duration-300";
@@ -93,6 +94,9 @@ export default function Profile() {
         </div>
 
         <div className="space-y-8">
+          {/* Statistiche scrittore */}
+          <WriterStats />
+
           {/* Info account */}
           <SectionCard
             icon={UserCircle}
