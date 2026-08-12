@@ -38,6 +38,8 @@
 - Budget Emergent LLM Key RICARICATO: generazione outline (Claude) e copertina (Nano Banana) ri-verificate E2E ✅
 - Serie di Libri (sequel): pulsante "Scrivi il seguito" su libri completati, prefill personaggi/impostazioni, contesto narrativo del vol. precedente iniettato in outline e capitoli, badge Vol. N in libreria — TESTATO 100% (continuità verificata con AI reale)
 - Email di benvenuto Resend (15 crediti omaggio) a ogni nuovo iscritto (email o Google) — TESTATA (trigger ok; consegna limitata dalla modalità test Resend)
+- Scaffale Serie in dashboard: volumi raggruppati per saga in ordine (serie_root_id, backfill dati esistenti) — TESTATO 100%
+- Copertine Coordinate: toggle sui sequel per usare la copertina del vol. precedente come riferimento di stile (Nano Banana editing) — TESTATO E2E (coerenza visiva confermata)
 
 ## Backlog
 - P1: test E2E delle feature non-AI (EPUB export, Pro Reader, Dashboard stats) — codice scritto, verifica pendente

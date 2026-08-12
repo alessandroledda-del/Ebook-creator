@@ -1,4 +1,4 @@
-import { ImagePlus, Sparkles, Upload, X } from "lucide-react";
+import { ImagePlus, Sparkles, Upload, X, Layers } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,6 +22,10 @@ export const CoverStudio = ({
   onRemoveReference,
   coverLoading,
   onGenerate,
+  isSequel,
+  parentTitle,
+  useParentCover,
+  setUseParentCover,
 }) => (
   <div className="grid md:grid-cols-2 gap-10 items-start">
     <div className="flex justify-center">
@@ -38,6 +42,39 @@ export const CoverStudio = ({
         Scegli il motore di generazione e lo stile visivo. La copertina viene creata dalla trama del libro.
       </p>
       <div className="space-y-8">
+        {isSequel && (
+          <button
+            type="button"
+            onClick={() => setUseParentCover(!useParentCover)}
+            data-testid="series-cover-toggle"
+            className={`w-full flex items-start gap-3 border rounded-sm p-4 text-left transition-colors duration-300 ${
+              useParentCover
+                ? "border-[#722F37] bg-[#722F37]/5"
+                : "border-[#E7E5E4] hover:border-[#722F37]"
+            }`}
+          >
+            <Layers className={`w-5 h-5 shrink-0 mt-0.5 ${useParentCover ? "text-[#722F37]" : "text-[#57534E]"}`} strokeWidth={1.5} />
+            <span>
+              <span className="block text-sm font-medium text-[#1C1917]">
+                Copertina coordinata con la serie
+              </span>
+              <span className="block text-xs text-[#57534E] mt-1">
+                Usa la copertina di «{parentTitle}» come riferimento di stile: stessa palette e identità visiva. (Nano Banana)
+              </span>
+            </span>
+            <span
+              className={`ml-auto shrink-0 w-9 h-5 rounded-full relative transition-colors duration-300 ${
+                useParentCover ? "bg-[#722F37]" : "bg-[#E7E5E4]"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-300 ${
+                  useParentCover ? "left-[18px]" : "left-0.5"
+                }`}
+              />
+            </span>
+          </button>
+        )}
         <div>
           <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">Motore</Label>
           <Select value={coverModel} onValueChange={setCoverModel}>

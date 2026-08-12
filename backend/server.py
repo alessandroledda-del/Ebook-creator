@@ -273,6 +273,7 @@ class CoverRequest(BaseModel):
     model: str = "gemini-nano-banana"
     style: Optional[str] = "elegante e cinematografico"
     reference_image: Optional[str] = None
+    use_parent_cover: bool = False
 
 
 # ---------------------- Auth helpers ----------------------
@@ -793,6 +794,7 @@ def _book_summary(doc: dict) -> dict:
         "num_capitoli": len(doc.get("capitoli", [])),
         "serie_volume": doc.get("serie_volume", 1),
         "parent_titolo": doc.get("parent_titolo", ""),
+        "serie_root_id": doc.get("serie_root_id", ""),
         "created_at": doc.get("created_at", ""),
     }
 
@@ -834,6 +836,7 @@ async def create_book(payload: BookCreate, user: User = Depends(get_current_user
             "parent_book_id": parent["id"],
             "parent_titolo": parent.get("titolo", ""),
             "serie_volume": int(parent.get("serie_volume") or 1) + 1,
+            "serie_root_id": parent.get("serie_root_id") or parent["id"],
             "contesto_serie": contesto,
         }
 
@@ -1134,14 +1137,37 @@ async def generate_book_cover(
     if not doc:
         raise HTTPException(status_code=404, detail="Libro non trovato")
     cost = await ensure_credits(user.user_id, "cover")
+
+    model = payload.model
+    style = payload.style
+    reference_image = payload.reference_image
+    if payload.use_parent_cover:
+        if not doc.get("parent_book_id"):
+            raise HTTPException(status_code=400, detail="Questo libro non fa parte di una serie")
+        parent = await db.books.find_one(
+            {"id": doc["parent_book_id"], "user_id": user.user_id}, {"_id": 0}
+        )
+        if not parent or not parent.get("cover_image"):
+            raise HTTPException(
+                status_code=400,
+                detail="Il volume precedente non ha ancora una copertina: generala prima.",
+            )
+        reference_image = parent["cover_image"]
+        model = "gemini-nano-banana"
+        style = (
+            f"{payload.style or 'elegante e cinematografico'}, perfettamente coerente con "
+            "lo stile artistico, la palette di colori e l'identità visiva della copertina "
+            "di riferimento: deve sembrare il volume successivo della stessa serie editoriale"
+        )
+
     try:
         cover = await ai_service.generate_cover(
             title=doc.get("titolo") or doc.get("idea", "Libro"),
             genere=doc.get("genere", ""),
             sinossi=doc.get("sinossi", "") or doc.get("idea", ""),
-            model=payload.model,
-            style=payload.style,
-            reference_image=payload.reference_image,
+            model=model,
+            style=style,
+            reference_image=reference_image,
         )
     except Exception as e:
         logger.error(f"Generazione copertina fallita: {e}")
@@ -1149,10 +1175,10 @@ async def generate_book_cover(
 
     await db.books.update_one(
         {"id": book_id},
-        {"$set": {"cover_image": cover, "cover_model": payload.model}},
+        {"$set": {"cover_image": cover, "cover_model": model}},
     )
     await deduct_credits(user.user_id, cost)
-    return {"cover_image": cover, "cover_model": payload.model}
+    return {"cover_image": cover, "cover_model": model}
 
 
 # ---------------------- Character routes ----------------------

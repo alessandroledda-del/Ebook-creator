@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { PenLine, Sparkles, Search, Library, BookOpen, CheckCircle2 } from "lucide-react";
 import Header from "@/components/Header";
 import { BookCard } from "@/components/library/BookCard";
+import { SeriesShelf } from "@/components/library/SeriesShelf";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
@@ -64,6 +65,19 @@ export default function Dashboard() {
     () => [...new Set(books.map((b) => b.genere).filter(Boolean))],
     [books]
   );
+
+  const series = useMemo(() => {
+    const roots = new Set(books.map((b) => b.serie_root_id).filter(Boolean));
+    const groups = {};
+    books.forEach((b) => {
+      const key = b.serie_root_id || (roots.has(b.id) ? b.id : null);
+      if (!key) return;
+      (groups[key] = groups[key] || []).push(b);
+    });
+    return Object.values(groups)
+      .filter((g) => g.length > 1)
+      .map((g) => [...g].sort((a, b) => (a.serie_volume || 1) - (b.serie_volume || 1)));
+  }, [books]);
 
   const visibleBooks = useMemo(() => {
     let list = [...books];
@@ -178,6 +192,11 @@ export default function Dashboard() {
               <option value="titolo">Titolo A-Z</option>
             </select>
           </div>
+        )}
+
+        {/* Series shelves */}
+        {!loading && series.length > 0 && !query.trim() && genre === "tutti" && (
+          <SeriesShelf series={series} onOpen={(id) => navigate(`/book/${id}`)} />
         )}
 
         {loading ? (

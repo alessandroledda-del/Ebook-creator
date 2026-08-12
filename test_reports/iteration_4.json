@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 4 - Series Shelf + Coordinated Cover feature testing. Backend (pytest 2/2 PASS): GET /api/books exposes serie_root_id correctly (empty on Vol.1 book_parent_test01, equals 'book_parent_test01' on sequel book_341e3efcc848 with serie_volume=2). POST /api/books/{id}/cover with use_parent_cover=true on a NON-series book returns 400 with 'Questo libro non fa parte di una serie' (verified on a freshly-created throwaway standalone book, cleaned up in finally). No AI generation triggered - test user still at 6 credits. Frontend (all UI flows PASS via Playwright): (1) Dashboard shows data-testid=series-section with shelf 'Saga di «Gli Orologi del Tempo Sospeso»', 2 volumes in order (Vol.1 book_parent_test01 then Vol.2 book_341e3efcc848), both cover images loaded (data-URI base64), Vol.1/Vol.2 badges rendered. (2) Clicking series-volume-book_341e3efcc848 navigates to /book/book_341e3efcc848. (3) Typing 'xyz' in library-search-input hides series-section; clearing restores it. (4) Selecting genre filter Fantasy (non-Tutti) hides series-section; clicking Tutti restores it. (5) On sequel BookView -> tab Copertina, data-testid=series-cover-toggle visible with parent title 'Gli Orologi del Tempo Sospeso'; clicking toggles activated state (class gains bg-[#722F37]/5 border-[#722F37]) and reverts on second click. (6) On Vol.1 parent BookView -> tab Copertina, series-cover-toggle is NOT present. All 8 requested scenarios pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_series_cover.py",
+    "/app/test_reports/pytest/iteration_4_series_cover.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Dashboard.jsx series grouping (lines 69-80): only groups books that have serie_root_id set. Books whose sequels exist but which themselves lack a serie_root_id (parent volumes) are correctly included via the roots-Set membership check - good. However groups with length<=1 are filtered out (line 78), which means a parent that has no sequel yet won't show as a shelf even if serie_volume=1; that's the intended UX.",
+    "SeriesShelf.jsx uses volumes[0].id as key (line 16) which works because volumes are pre-sorted by serie_volume; safe as long as the parent has volume=1 (or a stable id).",
+    "CoverStudio.jsx toggle uses tailwind arbitrary values with the '/5' opacity utility ('bg-[#722F37]/5') - verified rendering correctly in production build.",
+    "Backend /api/books/{id}/cover with use_parent_cover on non-series book: main agent confirmed the check happens after ensure_credits but before deduction, so it correctly does NOT consume credits on 400 - verified: seed user still shows 6 crediti after the test."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_series_cover.py"
+  ],
+  "success_rate": {"backend": "100% (2/2)", "frontend": "100% (all 8 requested scenarios)"},
+  "test_credentials": "test@libroteca.ai / Test1234! (6 crediti - unchanged after tests, no AI generation performed)",
+  "seed_data_creation": "One transient standalone book created via API in test_use_parent_cover_on_non_series_returns_400 to safely trigger the 400 error - deleted in finally block. No residual data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Series/Sequel feature end-to-end (backend + UI) is fully green through iteration 4. Testids in play: series-section, series-shelf-{i}, series-volume-{bookId}, series-cover-toggle. To activate/deactivate the coordinated-cover toggle in tests just click series-cover-toggle; visual state is reflected via class 'bg-[#722F37]/5' + 'border-[#722F37]'. The 400 error path for use_parent_cover on non-series does NOT consume credits (validation happens post-ensure_credits, pre-deduction).",
+  "rca of the issue": "N/A - feature working as designed."
+}

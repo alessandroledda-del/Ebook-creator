@@ -33,6 +33,7 @@ export default function BookView() {
   const [downloadingEpub, setDownloadingEpub] = useState(false);
   const [referenceImage, setReferenceImage] = useState(null);
   const [referenceName, setReferenceName] = useState("");
+  const [useParentCover, setUseParentCover] = useState(false);
 
   // sharing
   const [shareOpen, setShareOpen] = useState(false);
@@ -184,7 +185,8 @@ export default function BookView() {
       const res = await api.post(`/books/${id}/cover`, {
         model: coverModel,
         style: coverStyle,
-        reference_image: referenceImage,
+        reference_image: useParentCover ? null : referenceImage,
+        use_parent_cover: useParentCover,
       });
       setBook((b) => ({ ...b, cover_image: res.data.cover_image, cover_model: res.data.cover_model }));
       await refreshUser();
@@ -193,6 +195,8 @@ export default function BookView() {
       if (e?.response?.status === 402) {
         toast.error("Crediti insufficienti per la copertina.");
         navigate("/crediti");
+      } else if (e?.response?.status === 400) {
+        toast.error(e.response?.data?.detail || "Generazione copertina fallita");
       } else {
         toast.error("Generazione copertina fallita");
       }
@@ -343,6 +347,10 @@ export default function BookView() {
               onRemoveReference={removeReference}
               coverLoading={coverLoading}
               onGenerate={generateCover}
+              isSequel={!!book.parent_book_id}
+              parentTitle={book.parent_titolo}
+              useParentCover={useParentCover}
+              setUseParentCover={setUseParentCover}
             />
           </TabsContent>
         </Tabs>
