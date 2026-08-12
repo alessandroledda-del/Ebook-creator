@@ -16,6 +16,8 @@ import httpx
 import bcrypt
 import jwt
 import secrets
+import asyncio
+import resend
 
 import ai_service
 from emergentintegrations.payments.stripe.checkout import (
@@ -577,6 +579,47 @@ async def refresh_token(request: Request, response: Response):
     return {"ok": True}
 
 
+RESET_EMAIL_HTML = """
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#FDFBF7;padding:40px 0;font-family:Georgia,'Times New Roman',serif;">
+  <tr><td align="center">
+    <table width="520" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #E7E5E4;border-radius:4px;">
+      <tr><td style="background-color:#722F37;padding:28px 40px;">
+        <span style="color:#ffffff;font-size:24px;letter-spacing:-0.5px;">Libroteca</span>
+      </td></tr>
+      <tr><td style="padding:36px 40px;">
+        <p style="color:#722F37;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:Arial,sans-serif;font-weight:bold;margin:0 0 12px;">Reimposta la password</p>
+        <h1 style="color:#1C1917;font-size:26px;margin:0 0 16px;font-weight:normal;">Ciao {name},</h1>
+        <p style="color:#57534E;font-size:15px;line-height:1.7;margin:0 0 28px;font-family:Arial,sans-serif;">
+          Abbiamo ricevuto una richiesta per reimpostare la password del tuo account Libroteca.
+          Clicca il pulsante qui sotto per scegliere una nuova password. Il link è valido per 1 ora.
+        </p>
+        <table cellpadding="0" cellspacing="0"><tr><td style="background-color:#722F37;border-radius:2px;">
+          <a href="{reset_link}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-size:14px;font-family:Arial,sans-serif;font-weight:bold;">Reimposta la password</a>
+        </td></tr></table>
+        <p style="color:#A8A29E;font-size:12px;line-height:1.6;margin:28px 0 0;font-family:Arial,sans-serif;">
+          Se non hai richiesto tu il reset, ignora questa email: la tua password resterà invariata.
+        </p>
+      </td></tr>
+      <tr><td style="border-top:1px solid #E7E5E4;padding:20px 40px;">
+        <p style="color:#A8A29E;font-size:11px;margin:0;font-family:Arial,sans-serif;">Libroteca — La tua casa editrice personale, potenziata dall'AI.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+"""
+
+
+async def send_reset_email(to_email: str, name: str, reset_link: str):
+    resend.api_key = os.environ["RESEND_API_KEY"]
+    params = {
+        "from": f"Libroteca <{os.environ['SENDER_EMAIL']}>",
+        "to": [to_email],
+        "subject": "Reimposta la tua password — Libroteca",
+        "html": RESET_EMAIL_HTML.replace("{name}", name or "").replace("{reset_link}", reset_link),
+    }
+    return await asyncio.to_thread(resend.Emails.send, params)
+
+
 @api_router.post("/auth/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest, request: Request):
     email = payload.email.strip().lower()
@@ -590,7 +633,12 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request):
             "used": False,
         })
         origin = request.headers.get("Origin", "")
-        logger.info(f"[RESET PASSWORD] Link per {email}: {origin}/reset-password?token={token}")
+        reset_link = f"{origin}/reset-password?token={token}"
+        logger.info(f"[RESET PASSWORD] Link per {email}: {reset_link}")
+        try:
+            await send_reset_email(email, user_doc.get("name", ""), reset_link)
+        except Exception as e:
+            logger.error(f"Invio email di reset fallito per {email}: {e}")
     return {"message": "Se l'email è registrata, riceverai un link per reimpostare la password."}
 
 
@@ -612,6 +660,64 @@ async def reset_password(payload: ResetPasswordRequest):
     )
     await db.password_reset_tokens.update_one({"token": payload.token}, {"$set": {"used": True}})
     return {"message": "Password aggiornata. Ora puoi accedere."}
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: Optional[str] = ""
+    new_password: str
+
+
+class ChangeEmailRequest(BaseModel):
+    new_email: str
+    password: str
+
+
+@api_router.get("/auth/account")
+async def account_info(user: User = Depends(get_current_user)):
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    has_password = bool(doc.get("password_hash"))
+    return {
+        "email": doc["email"],
+        "name": doc.get("name", ""),
+        "has_password": has_password,
+        "auth_provider": doc.get("auth_provider") or ("email" if has_password else "google"),
+        "credits": doc.get("credits", 0),
+    }
+
+
+@api_router.post("/auth/change-password")
+async def change_password(payload: ChangePasswordRequest, user: User = Depends(get_current_user)):
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="La nuova password deve avere almeno 6 caratteri")
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    if doc.get("password_hash"):
+        if not verify_password(payload.current_password or "", doc["password_hash"]):
+            raise HTTPException(status_code=400, detail="La password attuale non è corretta")
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"password_hash": hash_password(payload.new_password)}},
+    )
+    return {"message": "Password aggiornata con successo."}
+
+
+@api_router.post("/auth/change-email")
+async def change_email(payload: ChangeEmailRequest, user: User = Depends(get_current_user)):
+    new_email = payload.new_email.strip().lower()
+    if "@" not in new_email or "." not in new_email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Email non valida")
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    if not doc.get("password_hash"):
+        raise HTTPException(
+            status_code=400,
+            detail="Il tuo account usa l'accesso Google: l'email non può essere modificata. Imposta prima una password.",
+        )
+    if not verify_password(payload.password, doc["password_hash"]):
+        raise HTTPException(status_code=400, detail="La password non è corretta")
+    if new_email != doc["email"] and await db.users.find_one({"email": new_email}):
+        raise HTTPException(status_code=400, detail="Questa email è già usata da un altro account")
+    await db.users.update_one({"user_id": user.user_id}, {"$set": {"email": new_email}})
+    updated = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    return User(**updated)
 
 
 # ---------------------- Book helpers ----------------------

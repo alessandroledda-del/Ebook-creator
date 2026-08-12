@@ -29,15 +29,18 @@
 ## Implementato (2026-06-12)
 - Auth Email & Password (JWT httpOnly cookies, access 15min + refresh 7gg) accanto a Google — TESTATO 100% (backend+frontend)
 - Pagina /login con tab Accedi/Registrati + pulsante Google + password dimenticata
-- Reset password (/reset-password?token=..., link loggato su console backend, token monouso 1h)
+- Reset password (/reset-password?token=..., token monouso 1h)
+- Email reali di reset via Resend (mittente onboarding@resend.dev; in modalità test consegna solo all'email del proprietario account Resend; fallback: link loggato su console) — TESTATO
+- Pagina Profilo /profilo: info account, cambio password (o impostazione password per account Google), cambio email con conferma password — TESTATO 100%
+- Landing: sezione "Esempi" con 3 copertine generate AI + animazioni whileInView su esempi/CTA — TESTATO
 - Protezione brute force (5 tentativi = lockout 15 min), indice unico email, seeding test user
-- 15 crediti di benvenuto anche per registrazione email
-- Interceptor axios per refresh automatico del token
+- 15 crediti di benvenuto anche per registrazione email; interceptor axios refresh automatico
+- Budget Emergent LLM Key RICARICATO: generazione outline (Claude) e copertina (Nano Banana) ri-verificate E2E ✅
 
 ## Backlog
 - P1: test E2E delle feature non-AI (EPUB export, Pro Reader, Dashboard stats) — codice scritto, verifica pendente
-- P1: animazioni/sezione esempi su Landing (piano UI approvato, non ancora implementato)
-- P1: regressione completa generazione AI quando il budget LLM viene ricaricato
+- P2: verificare un dominio su resend.com/domains per inviare email di reset a qualsiasi destinatario (ora solo all'owner Resend)
+- P2: usare APP_URL fisso invece dell'header Origin per il link di reset (hardening anti-phishing)
 - P2: rigenerazione copertina con immagine di riferimento — FATTO (Nano Banana editing)
 - P2: condivisione pubblica read-only — FATTO (`/p/{public_id}`)
 - Monetizzazione crediti Stripe — FATTO (pacchetti Starter/Plus/Pro, benvenuto 15 cr)

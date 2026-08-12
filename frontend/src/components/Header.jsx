@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Feather, LogOut, LibraryBig, PenLine, Coins } from "lucide-react";
+import { Feather, LogOut, LibraryBig, PenLine, Coins, UserCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   DropdownMenu,
@@ -65,6 +65,9 @@ export default function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/crediti")} data-testid="menu-credits">
                   <Coins className="w-4 h-4 mr-2" strokeWidth={1.5} /> Crediti ({user.credits ?? 0})
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/profilo")} data-testid="menu-profile">
+                  <UserCircle className="w-4 h-4 mr-2" strokeWidth={1.5} /> Profilo
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout} data-testid="logout-btn" className="text-[#722F37]">
                   <LogOut className="w-4 h-4 mr-2" strokeWidth={1.5} /> Esci

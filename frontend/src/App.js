@@ -11,6 +11,7 @@ import CreateBook from "@/pages/CreateBook";
 import BookView from "@/pages/BookView";
 import Credits from "@/pages/Credits";
 import PublicBook from "@/pages/PublicBook";
+import Profile from "@/pages/Profile";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 function AppRouter() {
@@ -53,6 +54,14 @@ function AppRouter() {
         element={
           <ProtectedRoute>
             <Credits />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profilo"
+        element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         }
       />

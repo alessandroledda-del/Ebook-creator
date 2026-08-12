@@ -12,7 +12,7 @@ import {
   Share2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { BOOK_MOCKUP, CHAR_PLACEHOLDER } from "@/components/book/media";
+import { BOOK_MOCKUP, CHAR_PLACEHOLDER, EXAMPLE_BOOKS } from "@/components/book/media";
 
 const MODELS = ["Claude Sonnet 4.5", "GPT-5.2", "Gemini Nano Banana", "GPT Image 1"];
 
@@ -210,10 +210,62 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Esempi dalla libreria */}
+      <section className="max-w-6xl mx-auto px-6 py-24">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="max-w-xl mb-16"
+        >
+          <p className="text-xs font-sans uppercase tracking-[0.2em] text-[#722F37] font-semibold mb-4">Esempi</p>
+          <h2 className="font-serif text-4xl lg:text-5xl tracking-tight leading-tight">
+            Libri nati da una <span className="italic text-[#722F37]">sola frase</span>.
+          </h2>
+          <p className="text-[#57534E] mt-5 leading-relaxed">
+            Trama, capitoli e copertina: ogni titolo qui sotto è stato generato interamente dall&apos;AI partendo da un&apos;idea di poche parole.
+          </p>
+        </motion.div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-10">
+          {EXAMPLE_BOOKS.map((b, i) => (
+            <motion.article
+              key={b.titolo}
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.6, delay: i * 0.12, ease: [0.22, 1, 0.36, 1] }}
+              className="group"
+              data-testid={`example-book-${i}`}
+            >
+              <div className="relative overflow-hidden rounded-sm border border-[#E7E5E4] shadow-lg transition-all duration-500 group-hover:shadow-2xl group-hover:-translate-y-2">
+                <img
+                  src={b.cover}
+                  alt={`Copertina di ${b.titolo}`}
+                  loading="lazy"
+                  className="w-full aspect-[2/3] object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                />
+              </div>
+              <div className="mt-5">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[#722F37] font-semibold mb-1.5">{b.genere}</p>
+                <h3 className="font-serif text-2xl tracking-tight">{b.titolo}</h3>
+                <p className="text-sm text-[#57534E] leading-relaxed mt-2">{b.sinossi}</p>
+              </div>
+            </motion.article>
+          ))}
+        </div>
+      </section>
+
       {/* CTA band */}
       <section className="relative bg-[#722F37] text-white overflow-hidden">
         <div className="grain-overlay opacity-[0.06]" />
         <div className="relative max-w-4xl mx-auto px-6 py-24 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
           <Feather className="w-8 h-8 mx-auto mb-6 text-white/80" strokeWidth={1.5} />
           <h2 className="font-serif text-4xl lg:text-5xl tracking-tight leading-tight">
             Pronto a pubblicare la tua prima storia?
@@ -229,6 +281,7 @@ export default function Landing() {
             Inizia gratis
             <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={1.5} />
           </button>
+          </motion.div>
         </div>
       </section>
 
