@@ -64,11 +64,12 @@ def _characters_block(characters: list) -> str:
     lines = []
     for c in characters:
         lines.append(
-            f"- Nome: {c.get('nome', 'N/D')}; Ruolo: {c.get('ruolo', 'N/D')}; "
-            f"Caratteristiche: {c.get('descrizione', '')}; "
-            f"Abilità: {c.get('abilita', '')}; "
-            f"Punti di forza: {c.get('punti_forza', '')}; "
-            f"Punti di debolezza: {c.get('punti_debolezza', '')}"
+            f"- Nome: {c.get('nome', 'N/D')}; Ruolo: {c.get('ruolo', 'N/D')}; Età: {c.get('eta', '')}; "
+            f"Aspetto/caratteristiche: {c.get('descrizione', '')}; Personalità: {c.get('personalita', '')}; "
+            f"Obiettivo: {c.get('obiettivo', '')}; Paura/ferita: {c.get('paura', '')}; "
+            f"Passato: {c.get('passato', '')}; Abilità/poteri: {c.get('abilita', '')}; "
+            f"Punti di forza: {c.get('punti_forza', '')}; Punti di debolezza: {c.get('punti_debolezza', '')}; "
+            f"Relazioni: {c.get('relazioni', '')}"
         )
     return "\n".join(lines)
 
@@ -201,10 +202,16 @@ Restituisci un JSON con ESATTAMENTE questa struttura:
     {{
       "nome": "Nome",
       "ruolo": "Ruolo nella storia (protagonista, antagonista, ecc.)",
-      "descrizione": "Caratteristiche fisiche e di personalità",
-      "abilita": "Abilità principali",
+      "eta": "Età o fascia d'età",
+      "descrizione": "Aspetto fisico e segni distintivi",
+      "personalita": "Tratti di personalità",
+      "obiettivo": "Obiettivo narrativo personale",
+      "paura": "Paura, ferita o conflitto interiore",
+      "passato": "Passato rilevante per la trama",
+      "abilita": "Abilità o poteri principali",
       "punti_forza": "Punti di forza",
-      "punti_debolezza": "Punti di debolezza"
+      "punti_debolezza": "Punti di debolezza",
+      "relazioni": "Relazioni chiave con gli altri personaggi"
     }}
   ],
   "capitoli": [
@@ -282,7 +289,7 @@ Restituisci un JSON con ESATTAMENTE questa struttura:
   "genere": "Genere letterario",
   "sinossi": "Sinossi avvincente di 4-6 frasi",
   "personaggi": [
-    {{"nome": "", "ruolo": "", "descrizione": "", "abilita": "", "punti_forza": "", "punti_debolezza": ""}}
+    {{"nome": "", "ruolo": "", "eta": "", "descrizione": "", "personalita": "", "obiettivo": "", "paura": "", "passato": "", "abilita": "", "punti_forza": "", "punti_debolezza": "", "relazioni": ""}}
   ],
   "capitoli": [
     {{"titolo": "Titolo del capitolo", "sommario": "1-2 frasi su cosa accade nel capitolo"}}
@@ -458,11 +465,13 @@ async def generate_portrait(character: dict, model: str = "gemini-nano-banana") 
     nome = character.get("nome", "Personaggio")
     ruolo = character.get("ruolo", "")
     descr = character.get("descrizione", "")
+    personalita = character.get("personalita", "")
+    eta = character.get("eta", "")
     abilita = character.get("abilita", "")
     forza = character.get("punti_forza", "")
     prompt = (
         f"Detailed character portrait of a fictional book character named {nome}. "
-        f"Role: {ruolo}. Appearance and personality: {descr}. "
+        f"Role: {ruolo}. Age: {eta}. Appearance: {descr}. Personality: {personalita}. "
         f"Abilities: {abilita}. Notable strengths: {forza}. "
         "Painterly illustrated portrait, head and shoulders, three-quarter view, "
         "expressive face, atmospheric lighting, rich literary book-illustration style, "
