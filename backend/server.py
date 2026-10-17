@@ -386,10 +386,16 @@ class Character(BaseModel):
     id: str = Field(default_factory=lambda: f"char_{uuid.uuid4().hex[:10]}")
     nome: str
     ruolo: Optional[str] = ""
+    eta: Optional[str] = ""
     descrizione: Optional[str] = ""
+    personalita: Optional[str] = ""
+    obiettivo: Optional[str] = ""
+    paura: Optional[str] = ""
+    passato: Optional[str] = ""
     abilita: Optional[str] = ""
     punti_forza: Optional[str] = ""
     punti_debolezza: Optional[str] = ""
+    relazioni: Optional[str] = ""
 
 
 class Chapter(BaseModel):
@@ -412,10 +418,16 @@ class BookCreate(BaseModel):
 class CharacterInput(BaseModel):
     nome: str
     ruolo: Optional[str] = ""
+    eta: Optional[str] = ""
     descrizione: Optional[str] = ""
+    personalita: Optional[str] = ""
+    obiettivo: Optional[str] = ""
+    paura: Optional[str] = ""
+    passato: Optional[str] = ""
     abilita: Optional[str] = ""
     punti_forza: Optional[str] = ""
     punti_debolezza: Optional[str] = ""
+    relazioni: Optional[str] = ""
 
 
 class CoverRequest(BaseModel):
@@ -1112,10 +1124,16 @@ async def generate_book_content(book_id: str, user: User = Depends(get_current_u
             "id": f"char_{uuid.uuid4().hex[:10]}",
             "nome": c.get("nome", "Senza nome"),
             "ruolo": c.get("ruolo", ""),
+            "eta": c.get("eta", ""),
             "descrizione": c.get("descrizione", ""),
+            "personalita": c.get("personalita", ""),
+            "obiettivo": c.get("obiettivo", ""),
+            "paura": c.get("paura", ""),
+            "passato": c.get("passato", ""),
             "abilita": c.get("abilita", ""),
             "punti_forza": c.get("punti_forza", ""),
             "punti_debolezza": c.get("punti_debolezza", ""),
+            "relazioni": c.get("relazioni", ""),
         })
 
     update = {
@@ -1173,10 +1191,16 @@ async def generate_outline_ep(book_id: str, user: User = Depends(get_current_use
             "id": f"char_{uuid.uuid4().hex[:10]}",
             "nome": c.get("nome", "Senza nome"),
             "ruolo": c.get("ruolo", ""),
+            "eta": c.get("eta", ""),
             "descrizione": c.get("descrizione", ""),
+            "personalita": c.get("personalita", ""),
+            "obiettivo": c.get("obiettivo", ""),
+            "paura": c.get("paura", ""),
+            "passato": c.get("passato", ""),
             "abilita": c.get("abilita", ""),
             "punti_forza": c.get("punti_forza", ""),
             "punti_debolezza": c.get("punti_debolezza", ""),
+            "relazioni": c.get("relazioni", ""),
         })
 
     capitoli = [

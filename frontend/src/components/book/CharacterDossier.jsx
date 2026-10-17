@@ -1,4 +1,4 @@
-import { UserPlus, Trash2, Pencil, ImagePlus, Sparkles, Shield, Zap, HeartCrack } from "lucide-react";
+import { UserPlus, Trash2, Pencil, ImagePlus, Sparkles, Shield, Zap, HeartCrack, Target, History, Users, Brain } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -94,7 +94,12 @@ export const CharacterDossier = ({
             </div>
             {c.descrizione && <p className="text-sm text-[#57534E] leading-relaxed mt-4">{c.descrizione}</p>}
             <div className="grid grid-cols-1 gap-px bg-[#E7E5E4] border border-[#E7E5E4] rounded-sm mt-4 overflow-hidden">
-              <Trait icon={Zap} label="Abilità" value={c.abilita} />
+              <Trait icon={Brain} label="Personalità" value={c.personalita} />
+              <Trait icon={Target} label="Obiettivo" value={c.obiettivo} />
+              <Trait icon={HeartCrack} label="Paura / ferita" value={c.paura} />
+              <Trait icon={History} label="Passato" value={c.passato} />
+              <Trait icon={Zap} label="Abilità / poteri" value={c.abilita} />
+              <Trait icon={Users} label="Relazioni" value={c.relazioni} />
               <Trait icon={Shield} label="Punti di forza" value={c.punti_forza} />
               <Trait icon={HeartCrack} label="Punti di debolezza" value={c.punti_debolezza} />
             </div>
