@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Feather, Plus, UserPlus, Trash2, Wand2, ArrowLeft, BookPlus, X } from "lucide-react";
+import { Feather, UserPlus, Trash2, Wand2, ArrowLeft, BookPlus, X, BookOpen, Layers } from "lucide-react";
 import Header from "@/components/Header";
 import CharacterDialog from "@/components/CharacterDialog";
 import api from "@/lib/api";
@@ -32,19 +32,23 @@ export default function CreateBook() {
   const [tono, setTono] = useState("avvincente e coinvolgente");
   const [lunghezza, setLunghezza] = useState("media");
   const [pov, setPov] = useState("terza");
+  const [formato, setFormato] = useState("single");
+  const [styleNotes, setStyleNotes] = useState("");
+  const [autoCovers, setAutoCovers] = useState(false);
   const [characters, setCharacters] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
   const [generating, setGenerating] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
+  const [progress, setProgress] = useState({ current: 0, total: 0, label: "", volume: 1, volumes: 1 });
 
   useEffect(() => {
     if (!sequelId) {
       setParentBook(null);
       return;
     }
+    setFormato("single");
     api
-      .get(`/books/${sequelId}`)
+      .get("/books/" + sequelId)
       .then((res) => {
         const p = res.data;
         setParentBook(p);
@@ -82,45 +86,139 @@ export default function CreateBook() {
     setEditIndex(null);
     setDialogOpen(true);
   };
+
   const openEdit = (i) => {
     setEditIndex(i);
     setDialogOpen(true);
   };
+
+  const chapterCount = parseInt(numCapitoli, 10) || 5;
+  const volumeCount = parentBook ? 1 : formato === "trilogy" ? 3 : 1;
+  const estimatedCredits = volumeCount * (1 + chapterCount) + (autoCovers ? volumeCount * 2 : 0);
+
+  const styleBlock = () =>
+    styleNotes.trim()
+      ? "\n\nDIREZIONE STILISTICA E VISIVA DA RISPETTARE: " + styleNotes.trim()
+      : "";
+
+  const trilogyIdea = (volumeIndex) => {
+    const directives = [
+      "QUESTO È IL VOLUME 1 DI UNA TRILOGIA DI TRE VOLUMI. Costruisci il mondo, presenta il conflitto centrale e sviluppa un arco locale completo, ma NON risolvere il conflitto principale della saga. Il finale deve essere soddisfacente per questo volume e allo stesso tempo aprire organicamente la strada al Volume 2.",
+      "QUESTO È IL VOLUME 2 DI UNA TRILOGIA DI TRE VOLUMI. È il seguito diretto del primo volume: aumenta la posta in gioco, approfondisci relazioni e conseguenze, cambia gli equilibri e inserisci una rivelazione o svolta decisiva. Chiudi un arco locale, ma NON risolvere ancora definitivamente il conflitto centrale della saga.",
+      "QUESTO È IL VOLUME 3 E FINALE DI UNA TRILOGIA DI TRE VOLUMI. Porta a compimento il conflitto centrale, risolvi in modo coerente gli archi dei personaggi e le promesse narrative dei volumi precedenti. Il finale deve essere definitivo, emotivamente soddisfacente e coerente con tutto ciò che è avvenuto prima.",
+    ];
+    return idea.trim() + "\n\n" + directives[volumeIndex] + styleBlock();
+  };
+
+  const singleIdea = () => idea.trim() + styleBlock();
 
   const handleGenerate = async () => {
     if (idea.trim().length < 10) {
       toast.error("Descrivi la tua idea con almeno una frase");
       return;
     }
+
     setGenerating(true);
+    const totalVolumes = parentBook ? 1 : formato === "trilogy" ? 3 : 1;
+    const expectedTotalChapters = totalVolumes * chapterCount;
+    let chaptersWritten = 0;
+    let previousBookId = parentBook ? parentBook.id : null;
+    let firstGeneratedId = null;
+
     try {
-      setProgress({ current: 0, total: 0, label: "Sto immaginando la trama e i personaggi…" });
-      const create = await api.post("/books", {
-        idea,
-        genere,
-        model,
-        num_capitoli: parseInt(numCapitoli, 10),
-        tono,
-        lunghezza,
-        pov,
-        characters,
-        parent_book_id: parentBook ? parentBook.id : null,
-      });
-      const bookId = create.data.id;
+      for (let volumeIndex = 0; volumeIndex < totalVolumes; volumeIndex++) {
+        const volumeNumber = parentBook
+          ? (parentBook.serie_volume || 1) + 1
+          : volumeIndex + 1;
 
-      const outline = await api.post(`/books/${bookId}/generate-outline`);
-      const chapters = outline.data.capitoli || [];
-      const total = chapters.length;
+        const ideaForVolume =
+          totalVolumes === 3 ? trilogyIdea(volumeIndex) : singleIdea();
 
-      for (let i = 0; i < total; i++) {
-        setProgress({ current: i, total, label: `Scrivo il capitolo: "${chapters[i].titolo}"` });
-        await api.post(`/books/${bookId}/generate-chapter`, { index: i });
+        setProgress({
+          current: chaptersWritten,
+          total: expectedTotalChapters,
+          volume: volumeIndex + 1,
+          volumes: totalVolumes,
+          label:
+            totalVolumes === 3
+              ? "Progetto il Volume " + (volumeIndex + 1) + " di 3…"
+              : "Sto immaginando la trama e i personaggi…",
+        });
+
+        const create = await api.post("/books", {
+          idea: ideaForVolume,
+          genere,
+          model,
+          num_capitoli: chapterCount,
+          tono,
+          lunghezza,
+          pov,
+          characters: volumeIndex === 0 ? characters : [],
+          parent_book_id: previousBookId,
+        });
+
+        const bookId = create.data.id;
+        if (!firstGeneratedId) firstGeneratedId = bookId;
+
+        const outline = await api.post("/books/" + bookId + "/generate-outline");
+        const chapters = outline.data.capitoli || [];
+
+        for (let i = 0; i < chapters.length; i++) {
+          setProgress({
+            current: chaptersWritten,
+            total: expectedTotalChapters,
+            volume: volumeIndex + 1,
+            volumes: totalVolumes,
+            label:
+              (totalVolumes === 3 ? "Volume " + (volumeIndex + 1) + "/3 · " : "") +
+              "Scrivo il capitolo: \"" + chapters[i].titolo + "\"",
+          });
+          await api.post("/books/" + bookId + "/generate-chapter", { index: i });
+          chaptersWritten += 1;
+        }
+
+        if (autoCovers) {
+          setProgress({
+            current: chaptersWritten,
+            total: expectedTotalChapters,
+            volume: volumeIndex + 1,
+            volumes: totalVolumes,
+            label:
+              totalVolumes === 3
+                ? "Creo la copertina coordinata del Volume " + (volumeIndex + 1) + " di 3…"
+                : "Creo la copertina…",
+          });
+          await api.post("/books/" + bookId + "/cover", {
+            model: "gemini-nano-banana",
+            style: styleNotes.trim() || "elegante, cinematografico e coerente con il genere",
+            reference_image: null,
+            use_parent_cover: volumeIndex > 0,
+          });
+        }
+
+        previousBookId = bookId;
+
+        setProgress({
+          current: chaptersWritten,
+          total: expectedTotalChapters,
+          volume: volumeIndex + 1,
+          volumes: totalVolumes,
+          label:
+            totalVolumes === 3
+              ? "Volume " + (volumeIndex + 1) + " completato."
+              : "Ultimi ritocchi…",
+        });
       }
 
-      setProgress({ current: total, total, label: "Ultimi ritocchi…" });
       await refreshUser();
-      toast.success("Il tuo libro è pronto!");
-      navigate(`/book/${bookId}`);
+
+      if (totalVolumes === 3) {
+        toast.success("La trilogia completa è pronta nella tua libreria!");
+        navigate("/dashboard");
+      } else {
+        toast.success(parentBook ? "Il nuovo volume è pronto!" : "Il tuo libro è pronto!");
+        navigate("/book/" + firstGeneratedId);
+      }
     } catch (e) {
       if (e?.response?.status === 402) {
         toast.error("Crediti insufficienti. Acquista crediti per continuare.");
@@ -128,7 +226,7 @@ export default function CreateBook() {
         navigate("/crediti");
         return;
       }
-      toast.error("Generazione fallita. Riprova.");
+      toast.error("Generazione interrotta. I volumi e capitoli già completati restano salvati.");
       setGenerating(false);
     }
   };
@@ -143,15 +241,18 @@ export default function CreateBook() {
       {generating && (
         <div className="fixed inset-0 z-[60] bg-[#FDFBF7]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
           <Feather className="w-12 h-12 text-[#722F37] animate-pulse mb-6" strokeWidth={1.5} />
-          <h2 className="font-serif text-3xl text-[#1C1917] mb-3 text-center">Sto scrivendo il tuo libro…</h2>
-          <p className="text-sm text-[#57534E] max-w-sm text-center min-h-[2.5rem]" data-testid="progress-label">
+          <h2 className="font-serif text-3xl text-[#1C1917] mb-3 text-center">
+            {progress.volumes === 3 ? "Sto scrivendo la tua trilogia…" : "Sto scrivendo il tuo libro…"}
+          </h2>
+          <p className="text-sm text-[#57534E] max-w-md text-center min-h-[2.5rem]" data-testid="progress-label">
             {progress.label}
           </p>
           {progress.total > 0 && (
-            <div className="w-72 mt-5" data-testid="generation-progress">
+            <div className="w-80 mt-5" data-testid="generation-progress">
               <Progress value={(progress.current / progress.total) * 100} className="h-1.5" />
               <p className="text-xs text-[#57534E] mt-3 text-center font-mono">
-                Capitolo {Math.min(progress.current + (progress.current < progress.total ? 1 : 0), progress.total)} di {progress.total}
+                {progress.volumes === 3 && "Volume " + progress.volume + " di 3 · "}
+                {progress.current} di {progress.total} capitoli completati
               </p>
             </div>
           )}
@@ -168,11 +269,17 @@ export default function CreateBook() {
         </button>
 
         <p className="text-xs font-sans uppercase tracking-[0.2em] text-[#722F37] font-semibold mb-3">
-          {parentBook ? `Nuovo volume · Vol. ${(parentBook.serie_volume || 1) + 1}` : "Nuova opera"}
+          {parentBook
+            ? "Nuovo volume · Vol. " + ((parentBook.serie_volume || 1) + 1)
+            : formato === "trilogy"
+            ? "Nuova trilogia · 3 volumi"
+            : "Nuova opera"}
         </p>
         <h1 className="font-serif text-4xl lg:text-5xl tracking-tight text-[#1C1917] mb-10">
           {parentBook ? (
             <>Come <span className="italic text-[#722F37]">continua</span> la storia?</>
+          ) : formato === "trilogy" ? (
+            <>Qual è la tua <span className="italic text-[#722F37]">saga</span>?</>
           ) : (
             <>Qual è la tua <span className="italic text-[#722F37]">idea</span>?</>
           )}
@@ -203,9 +310,53 @@ export default function CreateBook() {
         )}
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-12">
+          {!parentBook && (
+            <div>
+              <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
+                Formato
+              </Label>
+              <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                <button
+                  type="button"
+                  data-testid="format-single"
+                  onClick={() => setFormato("single")}
+                  className={
+                    "text-left p-5 border rounded-sm transition-all " +
+                    (formato === "single"
+                      ? "border-[#722F37] bg-[#722F37]/5"
+                      : "border-[#E7E5E4] bg-white hover:border-[#B9A5A8]")
+                  }
+                >
+                  <BookOpen className="w-5 h-5 text-[#722F37] mb-3" strokeWidth={1.5} />
+                  <p className="font-serif text-xl text-[#1C1917]">Libro singolo</p>
+                  <p className="text-sm text-[#57534E] mt-1">Un arco narrativo completo in un volume.</p>
+                </button>
+                <button
+                  type="button"
+                  data-testid="format-trilogy"
+                  onClick={() => setFormato("trilogy")}
+                  className={
+                    "text-left p-5 border rounded-sm transition-all " +
+                    (formato === "trilogy"
+                      ? "border-[#722F37] bg-[#722F37]/5"
+                      : "border-[#E7E5E4] bg-white hover:border-[#B9A5A8]")
+                  }
+                >
+                  <Layers className="w-5 h-5 text-[#722F37] mb-3" strokeWidth={1.5} />
+                  <p className="font-serif text-xl text-[#1C1917]">Trilogia completa</p>
+                  <p className="text-sm text-[#57534E] mt-1">Tre volumi collegati, scritti automaticamente in sequenza.</p>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div>
             <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
-              {parentBook ? "L'idea del nuovo volume" : "L'idea del libro"}
+              {parentBook
+                ? "L'idea del nuovo volume"
+                : formato === "trilogy"
+                ? "L'idea della trilogia"
+                : "L'idea del libro"}
             </Label>
             <Textarea
               data-testid="idea-input"
@@ -214,10 +365,12 @@ export default function CreateBook() {
               placeholder={
                 parentBook
                   ? "Es. Anni dopo gli eventi del primo volume, una nuova minaccia costringe i protagonisti a..."
+                  : formato === "trilogy"
+                  ? "Es. Un regno dimenticato riemerge e tre generazioni devono spezzare un patto antico..."
                   : "Es. Un'archeologa scopre una città sommersa che esiste solo nei sogni delle persone..."
               }
               rows={4}
-              className={`${field} text-lg mt-2 leading-relaxed`}
+              className={field + " text-lg mt-2 leading-relaxed"}
             />
           </div>
 
@@ -229,7 +382,7 @@ export default function CreateBook() {
                 value={genere}
                 onChange={(e) => setGenere(e.target.value)}
                 placeholder="Fantasy, giallo..."
-                className={`${field} mt-2`}
+                className={field + " mt-2"}
               />
             </div>
             <div>
@@ -245,7 +398,7 @@ export default function CreateBook() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">Capitoli</Label>
+              <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">Capitoli per volume</Label>
               <Select value={numCapitoli} onValueChange={setNumCapitoli}>
                 <SelectTrigger data-testid="chapters-select" className="mt-2 rounded-sm border-[#E7E5E4]">
                   <SelectValue />
@@ -306,6 +459,20 @@ export default function CreateBook() {
           </div>
 
           <div>
+            <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
+              Direzione stilistica e visiva
+            </Label>
+            <Textarea
+              data-testid="style-notes-input"
+              value={styleNotes}
+              onChange={(e) => setStyleNotes(e.target.value)}
+              placeholder="Es. magia antica e inquietante, atmosfera gotica, ritmo crescente, romance secondario, palette blu notte e oro per le copertine..."
+              rows={3}
+              className={field + " mt-2"}
+            />
+          </div>
+
+          <div>
             <div className="flex items-center justify-between mb-4">
               <Label className="text-xs uppercase tracking-[0.2em] text-[#722F37] font-semibold">
                 Personaggi (opzionale)
@@ -325,7 +492,7 @@ export default function CreateBook() {
             ) : (
               <div className="space-y-px bg-[#E7E5E4] border border-[#E7E5E4] rounded-sm overflow-hidden">
                 {characters.map((c, i) => (
-                  <div key={`${i}-${c.nome}`} className="bg-white p-4 flex items-start justify-between" data-testid="character-row">
+                  <div key={String(i) + "-" + c.nome} className="bg-white p-4 flex items-start justify-between" data-testid="character-row">
                     <div>
                       <p className="font-serif text-lg text-[#1C1917]">
                         {c.nome} {c.ruolo && <span className="text-sm text-[#57534E] font-sans">— {c.ruolo}</span>}
@@ -350,13 +517,38 @@ export default function CreateBook() {
             )}
           </div>
 
+          <div className="bg-white border border-[#E7E5E4] rounded-sm p-5">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoCovers}
+                onChange={(e) => setAutoCovers(e.target.checked)}
+                className="mt-1 accent-[#722F37]"
+                data-testid="auto-covers-checkbox"
+              />
+              <span>
+                <span className="block text-sm font-medium text-[#1C1917]">
+                  Genera automaticamente anche {volumeCount === 3 ? "le 3 copertine coordinate" : "la copertina"}
+                </span>
+                <span className="block text-xs text-[#57534E] mt-1">
+                  Usa Nano Banana; nelle trilogie i volumi successivi prendono la copertina precedente come riferimento visivo.
+                </span>
+              </span>
+            </label>
+            <p className="text-xs text-[#722F37] mt-4 font-medium" data-testid="estimated-credits">
+              Stima consumo: circa {estimatedCredits} crediti
+              {formato === "trilogy" && !parentBook ? " per completare tutti e 3 i volumi" : ""}.
+            </p>
+          </div>
+
           <button
             onClick={handleGenerate}
             disabled={generating}
             data-testid="generate-book-btn"
             className="flex items-center gap-2 bg-[#722F37] text-white hover:bg-[#5C252C] rounded-sm px-8 py-4 font-medium transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60"
           >
-            <Wand2 className="w-5 h-5" strokeWidth={1.5} /> Genera il libro
+            <Wand2 className="w-5 h-5" strokeWidth={1.5} />
+            {formato === "trilogy" && !parentBook ? "Scrivi tutta la trilogia" : "Genera il libro"}
           </button>
         </motion.div>
       </main>
