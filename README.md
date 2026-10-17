@@ -22,6 +22,8 @@ Trasforma le tue idee in libri completi con l'intelligenza artificiale. **Librot
 - **📚 Esporta in PDF & EPUB**: Scarica i tuoi libri in formati standard
 - **🔗 Condividi Pubblicamente**: Crea link pubblici per far leggere i tuoi libri
 - **📖 Serie & Sequels**: Genera continuazioni che mantengono continuità con il volume precedente
+- **📚 Trilogie Complete**: Scegli "Trilogia completa" e genera automaticamente 3 volumi collegati, capitolo per capitolo, con copertine coordinate opzionali
+- **🧬 Bibbia Personaggi Estesa**: Età, personalità, obiettivo, paura/ferita, passato, abilità, punti di forza/debolezza e relazioni vengono usati direttamente dai prompt AI
 
 ---
 
